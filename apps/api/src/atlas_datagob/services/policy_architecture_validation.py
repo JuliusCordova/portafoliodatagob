@@ -51,12 +51,12 @@ def _find_policy_gaps(description: str, architecture_missing_components: list[st
 
     if "reconciliation" in architecture_missing_components or "reconciliation" not in text and "cuadratura" not in text:
         gaps.append("Definir puntos de reconciliación/cuadratura desde ingesta hasta capa de consumo.")
-    if "semantic_model" in architecture_missing_components:
+    if "semantic_model" in architecture_missing_components or "certified_dataset" in architecture_missing_components:
         gaps.append("Definir modelo semántico o dataset certificado para consumo BI/reutilizable.")
     if "feature_layer" in architecture_missing_components:
         gaps.append("Definir ciclo de vida de features para Machine Learning.")
-    if "knowledge_layer" in architecture_missing_components or "retrieval_governance" in architecture_missing_components:
-        gaps.append("Definir capa de conocimiento, fuentes trazables y gobierno del retrieval para GenAI/RAG.")
+    if {"knowledge_layer", "retrieval_governance", "embeddings", "vector_index"}.intersection(architecture_missing_components):
+        gaps.append("Definir capa de conocimiento, embeddings, índice vectorial, fuentes trazables y gobierno del retrieval para GenAI/RAG.")
     if "owner" not in text and "steward" not in text and "responsable" not in text:
         gaps.append("Asignar Data Owner y Data Steward antes de comité.")
     return gaps
