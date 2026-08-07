@@ -1,6 +1,7 @@
 """FastAPI entry point for ATLAS DataGob MVP."""
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from atlas_datagob.agents.policy_intake_agent import PolicyIntakeAgent
@@ -22,10 +23,12 @@ from atlas_datagob.services.scoring import calculate_priority_score
 
 try:
     from fastapi import FastAPI, HTTPException
+    from fastapi.middleware.cors import CORSMiddleware
     from pydantic import BaseModel, Field
 except Exception:  # pragma: no cover
     FastAPI = None  # type: ignore
     HTTPException = Exception  # type: ignore
+    CORSMiddleware = None  # type: ignore
     BaseModel = object  # type: ignore
     Field = None  # type: ignore
 
@@ -36,8 +39,21 @@ DICTIONARY_PATH = DATA_ROOT / "canonical" / "data_dictionary.json"
 ER_MODEL_PATH = DATA_ROOT / "canonical" / "entity_relationship_model.json"
 
 
+def _allowed_origins() -> list[str]:
+    raw = os.getenv("ATLAS_ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
+    return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
+
 if FastAPI:
     app = FastAPI(title="ATLAS DataGob API", version="0.4.0")
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_allowed_origins(),
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     class DemandPayload(BaseModel):
         title: str = Field(min_length=3)

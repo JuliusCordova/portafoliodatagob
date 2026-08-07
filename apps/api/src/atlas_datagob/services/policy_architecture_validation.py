@@ -16,7 +16,7 @@ from atlas_datagob.services.policy_retrieval import build_policy_query, retrieve
 from atlas_datagob.services.rag_lite import find_similar_projects, load_projects, similar_projects_as_dicts
 
 POLICY_ROOT = Path("docs/policies")
-SYNTHETIC_PROJECTS_PATH = Path("data/synthetic/projects/projects.json")
+SYNTHETIC_PROJECTS_PATH = Path("data/synthetic/projects/existing_projects.json")
 
 
 @dataclass(frozen=True)
