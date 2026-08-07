@@ -16,9 +16,9 @@ Los agentes no reemplazan la decisión de gobierno. Actúan como copilotos para 
 
 ### 2. Domain Classifier Agent
 
-**Objetivo:** clasificar la demanda en dominio y subdominio QROMA.
+**Objetivo:** clasificar la demanda en dominio y subdominio.
 
-**Dominios iniciales:**
+**Dominios iniciales de referencia:**
 
 - Clientes y Partes Comerciales.
 - Comercial Order-to-Cash.
