@@ -6,7 +6,7 @@ Propuesto.
 
 ## Contexto
 
-QROMA requiere una demo para gestión de la demanda de proyectos de datos. Ya existe una línea conceptual de demos DataOps orientadas a calidad, profiling, reconciliación y procesamiento de datos. Esta nueva demo debe evitar mezclarse con esa responsabilidad.
+El portafolio Ayniq requiere una demo para gestión de la demanda de proyectos de datos. Ya existe una línea conceptual de demos DataOps orientadas a calidad, profiling, reconciliación y procesamiento de datos. Esta nueva demo debe evitar mezclarse con esa responsabilidad.
 
 ## Decisión
 
@@ -26,7 +26,7 @@ No será responsable de:
 
 - Ejecutar pipelines productivos de datos.
 - Implementar reglas de calidad transaccional.
-- Orquestar procesos de ingesta SAP a BigQuery.
+- Orquestar procesos de ingesta fuente a plataforma analítica.
 - Realizar reconciliación o cuadratura productiva.
 
 ## Consecuencias
@@ -39,6 +39,6 @@ No será responsable de:
 ## Integraciones futuras posibles
 
 - Consumo de métricas de calidad desde DataOps.
-- Enlace con Dataplex para dominios y catálogo.
+- Enlace con catálogo de datos para dominios y activos.
 - Exportación a BigQuery para tableros ejecutivos.
 - Integración con correo o Google Workspace para captura automática.
