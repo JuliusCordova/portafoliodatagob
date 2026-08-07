@@ -1,0 +1,6 @@
+name: atlas-datagob
+agent_directory: apps/api/src/atlas_datagob/agents
+create_params:
+  template: adk
+  deployment_target: cloud_run
+  session_storage: in_memory
