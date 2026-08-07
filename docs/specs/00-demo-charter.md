@@ -2,11 +2,11 @@
 
 ## Nombre de la demo
 
-**QROMA Data Demand Governance**
+**Ayniq Data Demand Governance**
 
 ## Propósito ejecutivo
 
-Construir una demo separada de DataOps para gestionar el ciclo completo de demanda de proyectos de datos en QROMA, desde una solicitud recibida por correo hasta su evaluación, priorización, decisión de comité, ejecución, seguimiento de valor y eventual pase de MVP a producción.
+Construir una demo separada de DataOps para gestionar el ciclo completo de demanda de proyectos de datos, desde una solicitud recibida por correo hasta su evaluación, priorización, decisión de comité, ejecución, seguimiento de valor y eventual pase de MVP a producción.
 
 ## Problema a resolver
 
