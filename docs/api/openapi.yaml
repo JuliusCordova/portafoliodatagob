@@ -1,11 +1,11 @@
 openapi: 3.1.0
 info:
   title: ATLAS DataGob API
-  version: 0.3.0
+  version: 0.4.0
   description: >
     Contract-first API for the ATLAS DataGob MVP. This contract captures the
-    Sprint 03 canonical metadata endpoints plus the Sprint 02 intake and scoring
-    baseline endpoints.
+    canonical metadata endpoints plus intake classification, scoring and the
+    Sprint 04 Policy RAG architecture validation endpoint.
 paths:
   /health:
     get:
@@ -29,6 +29,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ClassificationResult"
+  /intake/policy-architecture-validate:
+    post:
+      summary: Validate an intake request against policy RAG, canonical architecture and Operative Committee routing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PolicyArchitecturePayload"
+      responses:
+        "200":
+          description: Policy, architecture and committee validation result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PolicyArchitectureValidationResult"
+  /policies:
+    get:
+      summary: Return the versioned policy corpus metadata.
+      responses:
+        "200":
+          description: Policy documents available to the local RAG loader.
   /scoring/calculate:
     post:
       summary: Calculate the prioritization score for a demand.
@@ -90,6 +112,14 @@ components:
         domain_hint:
           type: string
           nullable: true
+    PolicyArchitecturePayload:
+      allOf:
+        - $ref: "#/components/schemas/DemandPayload"
+        - type: object
+          properties:
+            target_consumption:
+              type: string
+              nullable: true
     ClassificationResult:
       type: object
       required: [initiative_type, confidence, rationale, signals]
@@ -109,6 +139,54 @@ components:
           type: array
           items:
             type: string
+    PolicyArchitectureValidationResult:
+      type: object
+      required:
+        - structured_request
+        - classification
+        - architecture
+        - policy_matches
+        - policy_gaps
+        - architecture_gaps
+        - operative_committee
+        - human_architecture_review_required
+        - recommended_next_action
+        - committee_summary
+      properties:
+        structured_request:
+          type: object
+        classification:
+          type: object
+        architecture:
+          type: object
+        policy_matches:
+          type: array
+          items:
+            type: object
+        similar_projects:
+          type: array
+          items:
+            type: object
+        policy_gaps:
+          type: array
+          items:
+            type: string
+        architecture_gaps:
+          type: array
+          items:
+            type: string
+        finops_gaps:
+          type: array
+          items:
+            type: string
+        operative_committee:
+          type: object
+        human_architecture_review_required:
+          type: boolean
+        recommended_next_action:
+          type: string
+        committee_summary:
+          type: string
     ScoringPayload:
       type: object
       required:
