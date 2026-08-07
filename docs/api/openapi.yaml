@@ -1,0 +1,140 @@
+openapi: 3.1.0
+info:
+  title: ATLAS DataGob API
+  version: 0.3.0
+  description: >
+    Contract-first API for the ATLAS DataGob MVP. This contract captures the
+    Sprint 03 canonical metadata endpoints plus the Sprint 02 intake and scoring
+    baseline endpoints.
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        "200":
+          description: Service health status.
+  /intake/classify:
+    post:
+      summary: Classify a business demand into a canonical initiative type.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DemandPayload"
+      responses:
+        "200":
+          description: Classification result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClassificationResult"
+  /scoring/calculate:
+    post:
+      summary: Calculate the prioritization score for a demand.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScoringPayload"
+      responses:
+        "200":
+          description: Score and priority bucket.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScoringResult"
+  /metadata/domains:
+    get:
+      summary: Return the canonical domain and subdomain catalog.
+      responses:
+        "200":
+          description: Data domains and stewardship metadata.
+  /metadata/data-dictionary:
+    get:
+      summary: Return the versioned canonical data dictionary.
+      responses:
+        "200":
+          description: Entities, fields, data types, keys and classification labels.
+  /metadata/er-model:
+    get:
+      summary: Return the canonical entity relationship model.
+      responses:
+        "200":
+          description: Entity relationships and cardinalities.
+  /metadata/validate:
+    get:
+      summary: Validate dictionary, domain catalog and ER model consistency.
+      responses:
+        "200":
+          description: Validation status and errors.
+components:
+  schemas:
+    DemandPayload:
+      type: object
+      required: [title, description]
+      properties:
+        title:
+          type: string
+          minLength: 3
+        description:
+          type: string
+          minLength: 10
+        requester_area:
+          type: string
+          default: unknown
+        requester_role:
+          type: string
+          default: unknown
+        domain_hint:
+          type: string
+          nullable: true
+    ClassificationResult:
+      type: object
+      required: [initiative_type, confidence, rationale, signals]
+      properties:
+        initiative_type:
+          type: string
+          enum: [data_engineering, data_governance, machine_learning, agentic_ai, hybrid, unknown]
+        confidence:
+          type: number
+        rationale:
+          type: string
+        signals:
+          type: array
+          items:
+            type: string
+        secondary_types:
+          type: array
+          items:
+            type: string
+    ScoringPayload:
+      type: object
+      required:
+        - strategic_alignment
+        - business_value
+        - urgency
+        - data_readiness
+        - governance_risk
+        - technical_feasibility
+      properties:
+        strategic_alignment: {type: integer, minimum: 1, maximum: 5}
+        business_value: {type: integer, minimum: 1, maximum: 5}
+        urgency: {type: integer, minimum: 1, maximum: 5}
+        data_readiness: {type: integer, minimum: 1, maximum: 5}
+        governance_risk: {type: integer, minimum: 1, maximum: 5}
+        technical_feasibility: {type: integer, minimum: 1, maximum: 5}
+    ScoringResult:
+      type: object
+      required: [score, priority, rationale, components]
+      properties:
+        score:
+          type: number
+        priority:
+          type: string
+          enum: [Alta, Media, Baja]
+        rationale:
+          type: string
+        components:
+          type: object
