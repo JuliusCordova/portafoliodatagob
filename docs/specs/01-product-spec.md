@@ -2,7 +2,7 @@
 
 ## Visión
 
-Una plataforma agéntica de gobierno de demanda que permita a QROMA transformar solicitudes de datos en un portafolio priorizado, trazable y orientado a valor.
+Una plataforma agéntica de gobierno de demanda que permita a una organización transformar solicitudes de datos en un portafolio priorizado, trazable y orientado a valor.
 
 ## Usuarios objetivo
 
@@ -77,7 +77,7 @@ Un MVP solo escala si supera criterios de valor, adopción, riesgo, operación, 
 ## Criterios de éxito de la demo
 
 - Registrar una demanda desde una solicitud textual.
-- Clasificarla en dominio y subdominio QROMA.
+- Clasificarla en dominio y subdominio.
 - Generar caso de uso resumido con ayuda de agente.
 - Calcular score de priorización.
 - Simular decisión de comité.
