@@ -1,0 +1,71 @@
+{
+  "version": "0.3.0",
+  "entities": [
+    {
+      "entity_id": "ENT-DEMAND-REQUEST",
+      "name": "Demand Request",
+      "domain_id": "DOM-CUSTOMER",
+      "subdomain_id": "SUB-CUSTOMER-MASTER",
+      "description": "Solicitud de negocio o dominio para una iniciativa de datos, gobierno, machine learning o agentes IA.",
+      "source_systems": ["ATLAS DataGob"],
+      "tags": ["intake", "demand", "governance"],
+      "fields": [
+        {"field_id": "demand_id", "name": "Demand ID", "logical_type": "string", "description": "Identificador único de la solicitud.", "required": true, "primary_key": true, "classification": "internal", "examples": ["DEM-2026-0001"]},
+        {"field_id": "title", "name": "Title", "logical_type": "string", "description": "Título ejecutivo del requerimiento.", "required": true, "classification": "internal"},
+        {"field_id": "description", "name": "Description", "logical_type": "string", "description": "Descripción en lenguaje de negocio del problema u oportunidad.", "required": true, "classification": "internal"},
+        {"field_id": "requester_area", "name": "Requester Area", "logical_type": "string", "description": "Área solicitante o dominio de negocio.", "required": true, "classification": "internal"},
+        {"field_id": "requester_role", "name": "Requester Role", "logical_type": "string", "description": "Rol del solicitante: negocio, domain owner, data steward u otro.", "required": false, "classification": "internal"},
+        {"field_id": "status", "name": "Status", "logical_type": "string", "description": "Estado vigente del ciclo de vida de la demanda.", "required": true, "classification": "internal"},
+        {"field_id": "created_at", "name": "Created At", "logical_type": "timestamp", "description": "Fecha y hora de registro de la solicitud.", "required": true, "classification": "internal"}
+      ]
+    },
+    {
+      "entity_id": "ENT-INTAKE-CLASSIFICATION",
+      "name": "Intake Classification",
+      "domain_id": "DOM-CUSTOMER",
+      "subdomain_id": "SUB-CUSTOMER-MASTER",
+      "description": "Resultado de clasificación inicial del chatbot de intake.",
+      "source_systems": ["ATLAS DataGob", "Gemini ADK"],
+      "tags": ["classification", "agent", "intake"],
+      "fields": [
+        {"field_id": "classification_id", "name": "Classification ID", "logical_type": "string", "description": "Identificador del resultado de clasificación.", "required": true, "primary_key": true, "classification": "internal"},
+        {"field_id": "demand_id", "name": "Demand ID", "logical_type": "string", "description": "Solicitud clasificada.", "required": true, "foreign_key": true, "classification": "internal"},
+        {"field_id": "initiative_type", "name": "Initiative Type", "logical_type": "string", "description": "Tipo de iniciativa: data engineering, data governance, machine learning, agentic AI o hybrid.", "required": true, "classification": "internal"},
+        {"field_id": "confidence", "name": "Confidence", "logical_type": "decimal", "description": "Confianza de la clasificación propuesta por el agente.", "required": true, "classification": "internal"},
+        {"field_id": "rationale", "name": "Rationale", "logical_type": "string", "description": "Justificación explicable de la clasificación.", "required": true, "classification": "internal"}
+      ]
+    },
+    {
+      "entity_id": "ENT-SCORING-ASSESSMENT",
+      "name": "Scoring Assessment",
+      "domain_id": "DOM-SALES",
+      "subdomain_id": "SUB-SALES-PERFORMANCE",
+      "description": "Evaluación ponderada para priorizar iniciativas de datos e IA.",
+      "source_systems": ["ATLAS DataGob"],
+      "tags": ["scoring", "priority", "committee"],
+      "fields": [
+        {"field_id": "assessment_id", "name": "Assessment ID", "logical_type": "string", "description": "Identificador único de evaluación.", "required": true, "primary_key": true, "classification": "internal"},
+        {"field_id": "demand_id", "name": "Demand ID", "logical_type": "string", "description": "Solicitud evaluada.", "required": true, "foreign_key": true, "classification": "internal"},
+        {"field_id": "score", "name": "Score", "logical_type": "decimal", "description": "Score ponderado final.", "required": true, "classification": "internal"},
+        {"field_id": "priority", "name": "Priority", "logical_type": "string", "description": "Prioridad resultante: alta, media o baja.", "required": true, "classification": "internal"},
+        {"field_id": "components", "name": "Components", "logical_type": "json", "description": "Detalle de componentes ponderados del score.", "required": true, "classification": "internal"}
+      ]
+    },
+    {
+      "entity_id": "ENT-COMMITTEE-DECISION",
+      "name": "Committee Decision",
+      "domain_id": "DOM-SALES",
+      "subdomain_id": "SUB-SALES-PERFORMANCE",
+      "description": "Decisión humana de comité operativo o estratégico.",
+      "source_systems": ["ATLAS DataGob"],
+      "tags": ["committee", "decision", "audit"],
+      "fields": [
+        {"field_id": "decision_id", "name": "Decision ID", "logical_type": "string", "description": "Identificador único de decisión.", "required": true, "primary_key": true, "classification": "internal"},
+        {"field_id": "demand_id", "name": "Demand ID", "logical_type": "string", "description": "Solicitud decidida por comité.", "required": true, "foreign_key": true, "classification": "internal"},
+        {"field_id": "committee_type", "name": "Committee Type", "logical_type": "string", "description": "Tipo de comité que registra la decisión.", "required": true, "classification": "internal"},
+        {"field_id": "decision", "name": "Decision", "logical_type": "string", "description": "Ejecutar, backlog, reformular, descartar o go condicionado.", "required": true, "classification": "internal"},
+        {"field_id": "decided_at", "name": "Decided At", "logical_type": "timestamp", "description": "Fecha y hora de la decisión.", "required": true, "classification": "internal"}
+      ]
+    }
+  ]
+}

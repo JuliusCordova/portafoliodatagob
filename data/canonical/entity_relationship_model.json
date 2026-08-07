@@ -1,0 +1,32 @@
+{
+  "version": "0.3.0",
+  "relationships": [
+    {
+      "relationship_id": "REL-DEMAND-CLASSIFICATION",
+      "source_entity_id": "ENT-DEMAND-REQUEST",
+      "target_entity_id": "ENT-INTAKE-CLASSIFICATION",
+      "relationship_type": "one_to_many",
+      "source_field_id": "demand_id",
+      "target_field_id": "demand_id",
+      "description": "Una solicitud puede tener una o más clasificaciones si es reevaluada durante el triage."
+    },
+    {
+      "relationship_id": "REL-DEMAND-SCORING",
+      "source_entity_id": "ENT-DEMAND-REQUEST",
+      "target_entity_id": "ENT-SCORING-ASSESSMENT",
+      "relationship_type": "one_to_many",
+      "source_field_id": "demand_id",
+      "target_field_id": "demand_id",
+      "description": "Una solicitud puede recibir una o más evaluaciones de score durante su ciclo de vida."
+    },
+    {
+      "relationship_id": "REL-DEMAND-DECISION",
+      "source_entity_id": "ENT-DEMAND-REQUEST",
+      "target_entity_id": "ENT-COMMITTEE-DECISION",
+      "relationship_type": "one_to_many",
+      "source_field_id": "demand_id",
+      "target_field_id": "demand_id",
+      "description": "Una solicitud puede tener decisiones de comité operativo y estratégico."
+    }
+  ]
+}

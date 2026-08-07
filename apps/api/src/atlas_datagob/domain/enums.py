@@ -32,3 +32,33 @@ class DemandStatus(str, Enum):
     MVP_IN_PROGRESS = "mvp_in_progress"
     PRODUCTION_GATE = "production_gate"
     PRODUCTION_READY = "production_ready"
+
+
+class DataClassification(str, Enum):
+    """Canonical data sensitivity labels for the data dictionary."""
+
+    PUBLIC = "public"
+    INTERNAL = "internal"
+    CONFIDENTIAL = "confidential"
+    RESTRICTED = "restricted"
+
+
+class DataFieldType(str, Enum):
+    """Portable logical data types for canonical dictionary fields."""
+
+    STRING = "string"
+    INTEGER = "integer"
+    DECIMAL = "decimal"
+    BOOLEAN = "boolean"
+    DATE = "date"
+    TIMESTAMP = "timestamp"
+    JSON = "json"
+
+
+class RelationshipType(str, Enum):
+    """Supported entity relationship cardinalities."""
+
+    ONE_TO_ONE = "one_to_one"
+    ONE_TO_MANY = "one_to_many"
+    MANY_TO_ONE = "many_to_one"
+    MANY_TO_MANY = "many_to_many"

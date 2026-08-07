@@ -3,7 +3,29 @@
     "domain_id": "DOM-CUSTOMER",
     "name": "Clientes",
     "description": "Información maestra, contactabilidad, identificación, segmento y relación comercial del cliente.",
-    "subdomains": ["Maestro de clientes", "Contactabilidad", "Direcciones", "Perfil comercial"],
+    "subdomains": [
+      {
+        "subdomain_id": "SUB-CUSTOMER-MASTER",
+        "name": "Maestro de clientes",
+        "description": "Datos de identificación, segmentación y estado del cliente.",
+        "owner_role": "Domain Owner Clientes",
+        "steward_role": "Data Steward Clientes"
+      },
+      {
+        "subdomain_id": "SUB-CUSTOMER-CONTACT",
+        "name": "Contactabilidad",
+        "description": "Canales, datos de contacto, preferencias y calidad de contacto.",
+        "owner_role": "Domain Owner Clientes",
+        "steward_role": "Data Steward Clientes"
+      },
+      {
+        "subdomain_id": "SUB-CUSTOMER-ADDRESS",
+        "name": "Direcciones",
+        "description": "Direcciones, georreferenciación y ubicaciones de entrega/facturación.",
+        "owner_role": "Domain Owner Clientes",
+        "steward_role": "Data Steward Clientes"
+      }
+    ],
     "data_owner_role": "Domain Owner Clientes",
     "steward_role": "Data Steward Clientes"
   },
@@ -11,7 +33,22 @@
     "domain_id": "DOM-SALES",
     "name": "Ventas",
     "description": "Procesos comerciales desde oportunidad, cotización, pedido, despacho, facturación y performance comercial.",
-    "subdomains": ["Cotizaciones", "Pedidos", "Despacho", "Facturación", "Performance comercial"],
+    "subdomains": [
+      {
+        "subdomain_id": "SUB-SALES-ORDER",
+        "name": "Pedidos",
+        "description": "Pedidos de venta, estado, condiciones comerciales y trazabilidad order-to-cash.",
+        "owner_role": "Domain Owner Ventas",
+        "steward_role": "Data Steward Ventas"
+      },
+      {
+        "subdomain_id": "SUB-SALES-PERFORMANCE",
+        "name": "Performance comercial",
+        "description": "Indicadores de venta, margen, canal, territorio y línea de producto.",
+        "owner_role": "Domain Owner Ventas",
+        "steward_role": "Data Steward Ventas"
+      }
+    ],
     "data_owner_role": "Domain Owner Ventas",
     "steward_role": "Data Steward Ventas"
   },
@@ -19,7 +56,15 @@
     "domain_id": "DOM-PRODUCT",
     "name": "Producto",
     "description": "Catálogo, jerarquías, atributos, presentaciones, equivalencias y ciclo de vida de productos.",
-    "subdomains": ["Catálogo maestro", "Atributos", "Jerarquías", "Presentaciones"],
+    "subdomains": [
+      {
+        "subdomain_id": "SUB-PRODUCT-CATALOG",
+        "name": "Catálogo maestro",
+        "description": "Productos, familias, presentaciones, atributos principales y vigencia.",
+        "owner_role": "Domain Owner Producto",
+        "steward_role": "Data Steward Producto"
+      }
+    ],
     "data_owner_role": "Domain Owner Producto",
     "steward_role": "Data Steward Producto"
   }
