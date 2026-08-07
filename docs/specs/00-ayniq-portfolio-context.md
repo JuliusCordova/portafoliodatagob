@@ -4,11 +4,11 @@
 
 Portafolio DataGob es una demo reusable del portafolio Ayniq. Su objetivo es mostrar cómo una organización puede gobernar la demanda de proyectos de datos con agentes, criterios objetivos, trazabilidad y comités de decisión.
 
-## Rol de QROMA
+## Rol de la implementación de referencia
 
-QROMA funciona como caso de referencia para demostrar el modelo en una empresa de venta de pinturas, con gobierno de datos, dominios, subdominios, demanda recibida por correo, priorización y pase de MVP a producción.
+La solución incluye una implementación demostrativa parametrizable para aterrizar el modelo en una organización tipo, con gobierno de datos, dominios, subdominios, demanda recibida por correo, priorización y pase de MVP a producción.
 
-La solución no debe quedar limitada a QROMA. QROMA es la primera implementación demostrativa.
+La solución no debe quedar limitada a una organización específica. El core debe mantenerse reusable para distintos clientes, sectores y dominios.
 
 ## Diseño reusable
 
@@ -28,11 +28,11 @@ El activo debe construirse como acelerador de consultoría y demostración para 
 
 Estructura conceptual:
 
-Ayniq Portfolio > Portafolio DataGob > Implementación de referencia QROMA > Motor reusable de gobierno de demanda > Flujos agénticos > GCP con infraestructura como código.
+Ayniq Portfolio > Portafolio DataGob > Implementación de referencia > Motor reusable de gobierno de demanda > Flujos agénticos > GCP con infraestructura como código.
 
 ## Implicancia para el desarrollo
 
-Todo componente core debe evitar depender exclusivamente de nombres, dominios o reglas de QROMA. QROMA debe aparecer como configuración, datos de ejemplo, implementación de referencia o branding demostrativo.
+Todo componente core debe evitar depender exclusivamente de nombres, dominios o reglas de una organización específica. La implementación demostrativa debe aparecer como configuración, datos de ejemplo o branding sustituible.
 
 ## North Star
 
