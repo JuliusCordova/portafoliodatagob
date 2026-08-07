@@ -1,0 +1,26 @@
+[
+  {
+    "domain_id": "DOM-CUSTOMER",
+    "name": "Clientes",
+    "description": "Información maestra, contactabilidad, identificación, segmento y relación comercial del cliente.",
+    "subdomains": ["Maestro de clientes", "Contactabilidad", "Direcciones", "Perfil comercial"],
+    "data_owner_role": "Domain Owner Clientes",
+    "steward_role": "Data Steward Clientes"
+  },
+  {
+    "domain_id": "DOM-SALES",
+    "name": "Ventas",
+    "description": "Procesos comerciales desde oportunidad, cotización, pedido, despacho, facturación y performance comercial.",
+    "subdomains": ["Cotizaciones", "Pedidos", "Despacho", "Facturación", "Performance comercial"],
+    "data_owner_role": "Domain Owner Ventas",
+    "steward_role": "Data Steward Ventas"
+  },
+  {
+    "domain_id": "DOM-PRODUCT",
+    "name": "Producto",
+    "description": "Catálogo, jerarquías, atributos, presentaciones, equivalencias y ciclo de vida de productos.",
+    "subdomains": ["Catálogo maestro", "Atributos", "Jerarquías", "Presentaciones"],
+    "data_owner_role": "Domain Owner Producto",
+    "steward_role": "Data Steward Producto"
+  }
+]

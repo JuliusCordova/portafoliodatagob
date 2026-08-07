@@ -1,0 +1,46 @@
+[
+  {
+    "project_id": "SYN-001",
+    "title": "Reglas de calidad para clientes y contactabilidad",
+    "description": "Definición de reglas de calidad, linaje, data owner y data steward para el dominio Clientes.",
+    "initiative_type": "data_governance",
+    "domain": "Clientes",
+    "subdomain": "Contactabilidad",
+    "tags": ["calidad", "cliente", "steward", "linaje", "contactabilidad"],
+    "source": "synthetic",
+    "reusable_patterns": ["quality-rule-catalog", "owner-steward-checklist", "data-quality-scorecard"]
+  },
+  {
+    "project_id": "SYN-002",
+    "title": "Pipeline CDC para ventas hacia lakehouse",
+    "description": "Ingesta incremental de ventas, procesamiento bronze silver gold y publicación analítica.",
+    "initiative_type": "data_engineering",
+    "domain": "Ventas",
+    "subdomain": "Pedidos",
+    "tags": ["cdc", "pipeline", "bronze", "silver", "gold", "ventas"],
+    "source": "synthetic",
+    "reusable_patterns": ["cdc-ingestion-template", "medallion-processing", "batch-orchestration"]
+  },
+  {
+    "project_id": "SYN-003",
+    "title": "Modelo de propensión comercial",
+    "description": "Modelo de machine learning para priorizar clientes con mayor probabilidad de compra.",
+    "initiative_type": "machine_learning",
+    "domain": "Ventas",
+    "subdomain": "Performance comercial",
+    "tags": ["machine learning", "propension", "score", "modelo", "feature"],
+    "source": "synthetic",
+    "reusable_patterns": ["ml-use-case-canvas", "feature-readiness-check", "model-risk-checklist"]
+  },
+  {
+    "project_id": "SYN-004",
+    "title": "Chatbot de intake para iniciativas de datos",
+    "description": "Agente conversacional con Gemini ADK para clasificar solicitudes, detectar casos similares y preparar comité.",
+    "initiative_type": "agentic_ai",
+    "domain": "Gobierno de datos",
+    "subdomain": "Gestión de demanda",
+    "tags": ["agente", "chatbot", "gemini", "adk", "rag", "intake"],
+    "source": "synthetic",
+    "reusable_patterns": ["intake-agent-flow", "rag-project-validation", "human-in-the-loop"]
+  }
+]
