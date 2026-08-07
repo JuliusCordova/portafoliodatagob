@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from atlas_datagob.agents.policy_intake_agent import PolicyIntakeAgent
 from atlas_datagob.domain.models import DemandRequest, ScoringInput
 from atlas_datagob.services.canonical_catalog import (
     dictionary_to_response,
@@ -13,6 +14,10 @@ from atlas_datagob.services.canonical_catalog import (
     validate_canonical_model,
 )
 from atlas_datagob.services.classifier import classify_demand
+from atlas_datagob.services.policy_architecture_validation import (
+    IntakeValidationContext,
+    available_policies,
+)
 from atlas_datagob.services.scoring import calculate_priority_score
 
 try:
@@ -32,7 +37,7 @@ ER_MODEL_PATH = DATA_ROOT / "canonical" / "entity_relationship_model.json"
 
 
 if FastAPI:
-    app = FastAPI(title="ATLAS DataGob API", version="0.3.0")
+    app = FastAPI(title="ATLAS DataGob API", version="0.4.0")
 
     class DemandPayload(BaseModel):
         title: str = Field(min_length=3)
@@ -40,6 +45,9 @@ if FastAPI:
         requester_area: str = "unknown"
         requester_role: str = "unknown"
         domain_hint: str | None = None
+
+    class PolicyArchitecturePayload(DemandPayload):
+        target_consumption: str | None = None
 
     class ScoringPayload(BaseModel):
         strategic_alignment: int = Field(ge=1, le=5)
@@ -51,7 +59,7 @@ if FastAPI:
 
     @app.get("/health")
     def health() -> dict:
-        return {"status": "ok", "product": "ATLAS DataGob", "version": "0.3.0"}
+        return {"status": "ok", "product": "ATLAS DataGob", "version": "0.4.0"}
 
     @app.post("/intake/classify")
     def classify(payload: DemandPayload) -> dict:
@@ -64,6 +72,15 @@ if FastAPI:
             "signals": result.signals,
             "secondary_types": [item.value for item in result.secondary_types],
         }
+
+    @app.post("/intake/policy-architecture-validate")
+    def validate_policy_architecture_endpoint(payload: PolicyArchitecturePayload) -> dict:
+        context = IntakeValidationContext(**payload.model_dump())
+        return PolicyIntakeAgent().validate(context)
+
+    @app.get("/policies")
+    def policies() -> dict:
+        return {"policies": available_policies()}
 
     @app.post("/scoring/calculate")
     def scoring(payload: ScoringPayload) -> dict:
@@ -81,7 +98,7 @@ if FastAPI:
             raise HTTPException(status_code=404, detail="Domain catalog not found")
         domains = load_domains(DOMAINS_PATH)
         return {
-            "version": "0.3.0",
+            "version": "0.4.0",
             "domains": [
                 {
                     "domain_id": domain.domain_id,
