@@ -1,84 +1,125 @@
-# Sprint 04 · Policy RAG Multi-Agent Intake
+# Sprint 04 — Policy RAG Multi-Agent Intake
 
 ## Objective
 
-Build the next evolution of ATLAS DataGob intake: a multi-agent intake flow that validates business requests against data lifecycle and governance policies.
+Build the design foundation for an intake that validates data, ML and GenAI initiatives against policy RAG and the Google Cloud end-to-end reference architecture.
 
-## Why this sprint matters
+## Current design decisions
 
-The intake must help business users and domain owners structure their ideas and understand whether their request is ready for evaluation.
+- Intake must be multi-agent, not a single chatbot.
+- Policy RAG must validate data lifecycle, reconciliation, semantic model, datasets, governance and FinOps policies.
+- Architecture validation must use a predefined architecture designed by a Data Architect.
+- The model must not invent new architecture patterns.
+- If a request does not fit an approved pattern, it must be routed to a Data Architect.
 
-The system should detect gaps before a committee discussion, such as:
+## Included in this sprint design
 
-- Missing lifecycle definition.
-- Missing reconciliation controls.
-- Missing semantic model or certified dataset.
-- Missing data owner or steward.
-- Missing quality, lineage or access controls.
+- Policy RAG multi-agent specification.
+- Markdown policies for data lifecycle, reconciliation, semantic model and governance.
+- Google Cloud end-to-end reference architecture.
+- Architecture Compliance Agent definition.
+- Human review routing logic.
 
-## Scope
+## Canonical architecture scope
 
-### Documentation and Policy Corpus
+The intake must validate the full flow:
 
-- Add Policy RAG specification.
-- Add Markdown policy corpus for:
-  - Data lifecycle and Medallion readiness.
-  - Reconciliation control points.
-  - Semantic model and certified datasets.
-  - Governance, quality, lineage and access.
+`Sources -> Extraction -> Landing -> Bronze -> Silver -> Gold -> Feature Layer -> Knowledge Layer -> Serving -> BI / ML / GenAI / Agents -> Monitoring -> FinOps`
 
-### Backend
+## Agents planned
 
-- Policy document loader.
-- Local keyword/semantic-lite retrieval over Markdown policies.
-- Policy validation service.
-- Multi-agent orchestration skeleton.
-- Intake policy validation endpoint.
+1. Intake Conversation Agent.
+2. Requirement Structuring Agent.
+3. Initiative Classification Agent.
+4. Policy Retrieval Agent.
+5. Data Lifecycle Policy Agent.
+6. Reconciliation and Control Agent.
+7. Semantic Model and Dataset Agent.
+8. Governance and Risk Agent.
+9. Architecture Compliance Agent.
+10. Committee Pack Agent.
 
-### Agents
+## Architecture Compliance Agent
 
-- Intake Conversation Agent.
-- Requirement Structuring Agent.
-- Classification Agent.
-- Policy Retrieval Agent.
-- Data Lifecycle Policy Agent.
-- Reconciliation and Control Agent.
-- Semantic Model and Dataset Agent.
-- Governance and Risk Agent.
-- Committee Pack Agent.
+The new Architecture Compliance Agent validates whether the demand fits an approved Google Cloud architecture pattern:
 
-### Tests
+- BI / Reporting data product.
+- Data engineering product.
+- Machine Learning data product.
+- GenAI / RAG / Agentic data product.
+- Streaming / real-time data product.
 
-- Request with missing reconciliation must return policy gap.
-- BI request without semantic model must return policy gap.
-- ML request must evaluate Feature Layer need.
-- Agentic/RAG request must evaluate Knowledge Layer need.
-- Governance request must validate owner, steward, access and lineage.
+If a request uses a non-approved component or introduces a new architecture pattern, the agent must set:
 
-## Expected Output
+```json
+{
+  "human_architecture_review_required": true,
+  "recommended_next_action": "architect_review"
+}
+```
 
-For each intake request, ATLAS DataGob should produce:
+## Implementation plan
 
-- Structured request.
-- Initiative classification.
-- Similar projects.
-- Policy gaps.
-- Recommended next questions.
-- Committee-ready summary.
+### Step 1 — Policy and architecture loaders
 
-## Not in Scope Yet
+- Load Markdown policies from `docs/policies`.
+- Load reference architecture from `docs/architecture`.
+- Normalize policies into searchable chunks.
 
-- Real vector database.
-- Real Vertex AI / Gemini invocation.
-- Cloud Storage policy index.
-- Enterprise authentication.
-- Production deployment.
+### Step 2 — Local retrieval
 
-## Definition of Done
+- Reuse low-cost local retrieval approach for MVP.
+- Retrieve relevant policies by requirement text, initiative type and target consumption.
 
-- Policy corpus is versioned.
-- Multi-agent design is documented.
-- Local policy retrieval is implemented.
-- Validation endpoint is available.
-- Unit tests pass locally and in GitHub Actions.
-- The sprint keeps the product generic and reusable.
+### Step 3 — Policy validation service
+
+- Validate lifecycle completeness.
+- Validate reconciliation controls.
+- Validate semantic model obligation.
+- Validate governance controls.
+- Validate FinOps readiness.
+
+### Step 4 — Architecture Compliance Agent
+
+- Map request to approved architecture pattern.
+- Detect missing components.
+- Detect non-canonical components.
+- Detect need for human Data Architect review.
+
+### Step 5 — API endpoint
+
+Add endpoint:
+
+`POST /intake/policy-architecture-validate`
+
+The endpoint must return:
+
+- Classification.
+- Relevant policies.
+- Architecture pattern.
+- Missing controls.
+- FinOps gaps.
+- Human review flag.
+- Recommended next action.
+
+### Step 6 — Tests
+
+Add tests for:
+
+- BI request with complete architecture.
+- ML request missing feature layer.
+- GenAI request missing knowledge governance.
+- Streaming request requiring human review.
+- New component not in catalog.
+
+## Definition of done
+
+- Architecture policy files versioned.
+- Reference architecture versioned.
+- Architecture Compliance Agent designed.
+- Implementation path documented.
+- Tests planned for Sprint 04 build phase.
+
+## Next step
+
+Implement the services and agent logic in code after the design PR is approved.
