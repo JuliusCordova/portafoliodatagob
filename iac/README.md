@@ -1,6 +1,6 @@
 # IaC · Google Cloud
 
-Esta carpeta contendrá la infraestructura como código para la demo **QROMA Data Demand Governance**.
+Esta carpeta contendrá la infraestructura como código para la demo **Ayniq Data Demand Governance**.
 
 ## Objetivo
 
