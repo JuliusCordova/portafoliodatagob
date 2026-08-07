@@ -89,7 +89,7 @@ Representa una solicitud de proyecto de datos desde su captura hasta su decisió
 - gate_decision
 - conditions
 
-## Dominios QROMA iniciales
+## Dominios iniciales de referencia
 
 ### Clientes y Partes Comerciales
 
@@ -116,7 +116,7 @@ Subdominios:
 Subdominios:
 
 - Maestro de Productos.
-- Familias de Pinturas.
+- Familias de Productos.
 - Lista de Precios.
 - Promociones y Descuentos.
 - Equivalencias y Presentaciones.
