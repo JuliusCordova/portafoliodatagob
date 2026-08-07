@@ -13,12 +13,16 @@ The system must validate each requirement against:
 - Governance, quality, lineage and access policies.
 - Google Cloud end-to-end reference architecture.
 - FinOps-by-design controls.
+- Operative Committee decision workflow.
+- Data Architect final validation.
 
 ## Design principle
 
 The intake is not an architecture generator.
 
 The intake validates a request against policies and against a reference architecture predefined by a Data Architect. If the request does not fit, it escalates to human review.
+
+The agent does not approve or reject the initiative by itself. It produces a validation package for the Operative Committee. The Data Architect, as part of the Operative Committee, performs the final architecture validation before the initiative can move forward or be rejected.
 
 ## Multi-agent model
 
@@ -33,7 +37,8 @@ The intake validates a request against policies and against a reference architec
 9. Governance and Risk Agent.
 10. Architecture Compliance Agent.
 11. FinOps Readiness Agent.
-12. Committee Pack Agent.
+12. Operative Committee Routing Agent.
+13. Committee Pack Agent.
 
 ## Architecture Compliance Agent
 
@@ -51,6 +56,42 @@ The agent must not approve new components or new architecture flows autonomously
 
 If a request introduces a new component, bypasses a mandatory layer, or cannot be mapped to an approved architecture pattern, it must route the request to a Data Architect.
 
+## Operative Committee and Data Architect workflow
+
+After the user requirement is captured, structured and validated against policies, the request moves to Operative Committee validation.
+
+The Operative Committee is responsible for reviewing:
+
+- Business clarity and expected value.
+- Initiative classification.
+- Policy gaps.
+- Architecture gaps.
+- FinOps gaps.
+- Domain, owner and steward alignment.
+- Risk and governance implications.
+- Agent recommendation and evidence.
+
+The Data Architect is a mandatory member of the Operative Committee for architecture validation.
+
+### Decision rules
+
+1. If the request complies with policies and the canonical architecture, the Data Architect can approve the architecture validation and the committee can move the request to scoring or prioritization.
+2. If the request does not comply with policies or architecture, the request must be marked as rejected or reformulation-required, but only after the Data Architect performs a final validation.
+3. If the request introduces a new valid architectural need, the status must not be automatic rejection. It must be routed to Data Architect review as an architecture exception.
+4. If the Data Architect confirms the exception should become a new approved pattern or component, the canonical architecture and policy corpus must be updated through PR before the pattern is reused.
+5. If the Data Architect confirms non-compliance, the request is rejected with documented rationale, missing policies and rejected architecture gaps.
+
+## Request lifecycle states
+
+```text
+Draft
+  -> Intake Completed
+  -> Policy and Architecture Validation
+  -> Operative Committee Review
+  -> Data Architect Final Validation
+  -> Approved for Scoring | Reformulation Required | Rejected | Architecture Exception
+```
+
 ## Policy corpus
 
 The RAG policy corpus is stored as Markdown and can later be indexed into Cloud Storage JSONL, BigQuery vector search or Vertex AI Vector Search.
@@ -63,6 +104,7 @@ Initial corpus:
 - Governance, quality, lineage and access.
 - Google Cloud end-to-end reference architecture.
 - FinOps-by-design.
+- Operative Committee and Data Architect approval workflow.
 
 ## Expected validation output
 
@@ -76,9 +118,13 @@ Initial corpus:
   "architecture_gaps": [],
   "finops_gaps": [],
   "human_architecture_review_required": false,
+  "operative_committee_review_required": true,
+  "data_architect_final_validation_required": true,
   "recommended_questions": [],
-  "recommended_next_action": "approve_for_scoring | request_more_info | reformulate | architect_review",
-  "committee_summary": ""
+  "recommended_next_action": "approve_for_scoring | request_more_info | reformulate | architect_review | reject_with_architect_validation",
+  "committee_summary": "",
+  "data_architect_decision": "pending | approved | rejected | exception_requested",
+  "final_status": "pending_committee | approved_for_scoring | reformulation_required | rejected | architecture_exception"
 }
 ```
 
@@ -95,6 +141,7 @@ Human Data Architect review is required when:
 - The GenAI/RAG request lacks knowledge source traceability or retrieval governance.
 - Agentic actions affect production systems, customers, finances, access, risk or compliance.
 - FinOps risk is high or cannot be estimated.
+- The agent recommends rejection due to policy or architecture non-compliance.
 
 ## MVP storage approach
 
@@ -115,4 +162,6 @@ Future evolution:
 - The intake identifies missing components.
 - The intake identifies whether Data Architect review is required.
 - The intake never invents a new architecture pattern as approved.
+- The intake routes every validated requirement to Operative Committee review.
+- The intake requires Data Architect final validation before rejection due to policy or architecture non-compliance.
 - The final recommendation is explainable and committee-ready.
