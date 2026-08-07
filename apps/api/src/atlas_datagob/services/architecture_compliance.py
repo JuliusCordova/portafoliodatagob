@@ -38,20 +38,27 @@ NON_CANONICAL_COMPONENT_SIGNALS = {
 }
 
 COMPONENT_SIGNALS = {
-    "bronze": {"bronze", "crudo", "raw", "landing"},
-    "silver": {"silver", "limpieza", "calidad", "estandarizacion", "integracion"},
+    "sources": {"fuente", "fuentes", "source", "sources", "erp", "crm", "api", "archivos", "logs", "eventos"},
+    "extraction": {"extraccion", "extracción", "extraction", "ingesta", "ingestion", "etl", "elt", "datastream", "dataflow"},
+    "landing": {"landing", "raw", "zona de aterrizaje", "cloud storage", "gcs"},
+    "bronze": {"bronze", "crudo", "crudos", "raw", "landing"},
+    "silver": {"silver", "limpieza", "calidad", "estandarizacion", "estandarización", "integracion", "integración"},
     "gold": {"gold", "data mart", "modelo estrella", "hechos", "dimensiones", "fact", "dim"},
-    "reconciliation": {"cuadratura", "reconciliacion", "control", "conteo", "totales", "validacion"},
-    "semantic_model": {"modelo semantico", "semantic model", "power bi", "looker", "metricas certificadas"},
+    "quality": {"quality", "calidad", "reglas de calidad", "validacion", "validación"},
+    "lineage": {"lineage", "linaje", "trazabilidad", "catalogo", "catálogo", "dataplex"},
+    "serving": {"serving", "consumo", "endpoint", "api", "dashboard", "reporte", "agente"},
+    "monitoring": {"monitoring", "monitoreo", "observabilidad", "logging", "alertas", "sla"},
+    "reconciliation": {"cuadratura", "reconciliacion", "reconciliación", "control", "conteo", "totales", "validacion", "validación"},
+    "semantic_model": {"modelo semantico", "modelo semántico", "semantic model", "power bi", "looker", "metricas certificadas", "métricas certificadas"},
     "certified_dataset": {"dataset certificado", "certified dataset", "data product", "dataset"},
     "feature_layer": {"feature", "feature layer", "features", "variables", "entrenamiento"},
     "model_registry": {"registry", "registro de modelo", "model registry", "versionado de modelo"},
-    "model_monitoring": {"drift", "monitoreo de modelo", "model monitoring", "precision", "recall"},
+    "model_monitoring": {"drift", "monitoreo de modelo", "model monitoring", "precision", "precisión", "recall"},
     "knowledge_layer": {"knowledge", "capa de conocimiento", "fuentes", "documentos", "contexto"},
     "embeddings": {"embedding", "embeddings", "vector"},
-    "vector_index": {"vector search", "indice vectorial", "vector index", "bigquery vector"},
+    "vector_index": {"vector search", "indice vectorial", "índice vectorial", "vector index", "bigquery vector"},
     "retrieval_governance": {"retrieval", "trazabilidad", "grounding", "fuente citada", "rag"},
-    "finops": {"finops", "costo", "budget", "presupuesto", "labels", "billing", "particionado", "clustering"},
+    "finops": {"finops", "costo", "costos", "budget", "presupuesto", "labels", "billing", "particionado", "clustering"},
     "event_ingestion": {"pubsub", "pub/sub", "streaming", "evento", "tiempo real", "datastream"},
     "state_management": {"estado", "state", "checkpoint", "exactly once", "ventanas"},
 }
@@ -102,7 +109,7 @@ def infer_architecture_pattern(
         return "machine_learning"
     if initiative_type == InitiativeType.AGENTIC_AI or {"rag", "llm", "gemini", "agente", "agentico", "chatbot", "embedding"}.intersection(token_set):
         return "genai_rag"
-    if {"bi", "dashboard", "reporte", "power", "looker", "kpi", "metricas"}.intersection(token_set):
+    if {"bi", "dashboard", "reporte", "power", "looker", "kpi", "metricas", "métricas"}.intersection(token_set):
         return "bi_reporting"
     if initiative_type in {InitiativeType.DATA_ENGINEERING, InitiativeType.DATA_GOVERNANCE, InitiativeType.HYBRID}:
         return "data_engineering"
