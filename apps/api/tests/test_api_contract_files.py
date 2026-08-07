@@ -15,6 +15,8 @@ class ApiContractFilesTest(unittest.TestCase):
         self.assertIn("/metadata/data-dictionary:", content)
         self.assertIn("/metadata/er-model:", content)
         self.assertIn("/metadata/validate:", content)
+        self.assertIn("/intake/policy-architecture-validate:", content)
+        self.assertIn("PolicyArchitectureValidationResult", content)
 
 
 if __name__ == "__main__":
