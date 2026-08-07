@@ -2,8 +2,6 @@
 
 Demo agéntica para la gestión de la demanda de proyectos de datos, creada como parte del **portafolio Ayniq**.
 
-QROMA se utiliza como **caso de referencia / implementación demostrativa** para aterrizar el modelo en una empresa de venta de pinturas, con dominios como Clientes, Comercial Order-to-Cash, Productos, Logística, Finanzas y Gobierno de Datos.
-
 ## Propósito
 
 Construir una plataforma separada de DataOps para gestionar el ciclo completo de la demanda de datos: captura, clasificación, evaluación, priorización, decisión de comités, seguimiento y pase de MVP a producción.
@@ -12,7 +10,9 @@ Construir una plataforma separada de DataOps para gestionar el ciclo completo de
 
 La solución debe diseñarse como un producto demo reusable del portafolio Ayniq, parametrizable para distintos clientes, sectores y dominios de datos.
 
-QROMA es el primer caso de negocio referencial para validar:
+El primer caso demo se implementa como una configuración de referencia, sin acoplar el core del producto a una organización específica.
+
+El acelerador valida:
 
 - Gobierno de demanda de datos.
 - Clasificación por dominios y subdominios.
