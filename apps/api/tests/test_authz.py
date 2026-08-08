@@ -52,6 +52,7 @@ class AuthzModelTest(unittest.TestCase):
             )
 
         self.assertTrue(has_permission(context, "demand:create"))
+        self.assertTrue(has_permission(context, "ops:read"))
         self.assertFalse(has_permission(context, "demand:status:update"))
         with self.assertRaises(AuthorizationError):
             require_permission(context, "demand:status:update")
@@ -68,6 +69,7 @@ class AuthzModelTest(unittest.TestCase):
     def test_route_permission_mapping_covers_core_paths(self) -> None:
         self.assertIsNone(permission_for_request("GET", "/health"))
         self.assertIsNone(permission_for_request("OPTIONS", "/demands/backlog"))
+        self.assertEqual("ops:read", permission_for_request("GET", "/ops/readiness"))
         self.assertEqual("demand:create", permission_for_request("POST", "/demands/validate-and-create"))
         self.assertEqual("demand:read", permission_for_request("GET", "/demands/DEM-001"))
         self.assertEqual("demand:update", permission_for_request("PATCH", "/demands/DEM-001"))
@@ -93,6 +95,13 @@ class AuthzModelTest(unittest.TestCase):
             )
             self.assertEqual("owner@example.com", context.user)
 
+            ops_context = authorize_request(
+                "GET",
+                "/ops/readiness",
+                {"x-atlas-user": "owner@example.com", "x-atlas-roles": ROLE_DATA_OWNER},
+            )
+            self.assertEqual("owner@example.com", ops_context.user)
+
             with self.assertRaises(AuthorizationError):
                 authorize_request(
                     "PATCH",
@@ -113,6 +122,7 @@ class AuthzModelTest(unittest.TestCase):
         self.assertIn(AUTH_MODE_HEADER, snapshot["supported_modes"])
         self.assertIn(ROLE_DATA_OWNER, snapshot["supported_roles"])
         self.assertIn("demand:create", snapshot["permissions_by_role"][ROLE_DATA_OWNER])
+        self.assertIn("ops:read", snapshot["permissions_by_role"][ROLE_DATA_OWNER])
 
 
 if __name__ == "__main__":

@@ -41,6 +41,7 @@ from atlas_datagob.services.financial_scoring import (
     calculate_governed_direct_scoring,
     calculate_governed_scoring,
 )
+from atlas_datagob.services.operational_readiness import operational_readiness_snapshot
 from atlas_datagob.services.policy_architecture_validation import (
     IntakeValidationContext,
     available_policies,
@@ -65,7 +66,7 @@ DATA_ROOT = Path("data")
 DOMAINS_PATH = DATA_ROOT / "synthetic" / "domains" / "domains.json"
 DICTIONARY_PATH = DATA_ROOT / "canonical" / "data_dictionary.json"
 ER_MODEL_PATH = DATA_ROOT / "canonical" / "entity_relationship_model.json"
-API_VERSION = "0.6.3"
+API_VERSION = "0.6.4"
 
 
 def _allowed_origins() -> list[str]:
@@ -179,6 +180,10 @@ if FastAPI:
     @app.get("/auth/permissions")
     def auth_permissions() -> dict:
         return auth_snapshot()
+
+    @app.get("/ops/readiness")
+    def ops_readiness() -> dict:
+        return operational_readiness_snapshot()
 
     @app.post("/intake/classify")
     def classify(payload: DemandPayload) -> dict:

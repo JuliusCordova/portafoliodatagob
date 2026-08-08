@@ -32,69 +32,52 @@ SUPPORTED_ROLES = {
     ROLE_PLATFORM_ADMIN,
 }
 
+READ_ONLY_PERMISSIONS = {
+    "auth:read",
+    "demo:read",
+    "demand:read",
+    "metadata:read",
+    "ops:read",
+    "policy:read",
+}
+
 PERMISSIONS_BY_ROLE: dict[str, set[str]] = {
-    ROLE_VIEWER: {
-        "auth:read",
-        "demo:read",
-        "demand:read",
-        "metadata:read",
-        "policy:read",
-    },
+    ROLE_VIEWER: set(READ_ONLY_PERMISSIONS),
     ROLE_DATA_OWNER: {
-        "auth:read",
-        "demo:read",
+        *READ_ONLY_PERMISSIONS,
         "demand:create",
-        "demand:read",
         "intake:classify",
         "intake:validate",
-        "metadata:read",
-        "policy:read",
         "scoring:calculate",
     },
     ROLE_DATA_STEWARD: {
-        "auth:read",
-        "demo:read",
+        *READ_ONLY_PERMISSIONS,
         "demo:reset",
         "demand:create",
-        "demand:read",
         "demand:update",
         "demand:score",
         "intake:classify",
         "intake:validate",
-        "metadata:read",
-        "policy:read",
         "scoring:calculate",
     },
     ROLE_DATA_ARCHITECT: {
-        "auth:read",
-        "demo:read",
-        "demand:read",
+        *READ_ONLY_PERMISSIONS,
         "demand:update",
         "demand:status:update",
         "demand:score",
         "intake:classify",
         "intake:validate",
-        "metadata:read",
-        "policy:read",
         "scoring:calculate",
     },
     ROLE_COMMITTEE_MEMBER: {
-        "auth:read",
-        "demo:read",
-        "demand:read",
+        *READ_ONLY_PERMISSIONS,
         "demand:update",
         "demand:status:update",
         "demand:score",
-        "metadata:read",
-        "policy:read",
         "scoring:calculate",
     },
     ROLE_EXECUTIVE: {
-        "auth:read",
-        "demo:read",
-        "demand:read",
-        "metadata:read",
-        "policy:read",
+        *READ_ONLY_PERMISSIONS,
         "scoring:calculate",
     },
     ROLE_PLATFORM_ADMIN: {"*"},
@@ -231,6 +214,8 @@ def permission_for_request(method: str, path: str) -> str | None:
 
     if path == "/auth/permissions" and method == "GET":
         return "auth:read"
+    if path == "/ops/readiness" and method == "GET":
+        return "ops:read"
     if path.startswith("/metadata/") and method == "GET":
         return "metadata:read"
     if path == "/policies" and method == "GET":
