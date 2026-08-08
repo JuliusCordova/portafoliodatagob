@@ -1,4 +1,4 @@
-.PHONY: test test-api lint-local validate-contracts smoke-policy seed-demo dev-api dev-web docker-build docker-build-api docker-build-web deploy-validate deploy-api deploy-web deploy-verify validate-deploy-scripts cloud-smoke validate-cloud-smoke-script authenticated-cloud-smoke validate-authenticated-cloud-smoke-script
+.PHONY: test test-api lint-local validate-contracts smoke-policy seed-demo dev-api dev-web docker-build docker-build-api docker-build-web deploy-validate deploy-api deploy-web deploy-verify validate-deploy-scripts cloud-smoke validate-cloud-smoke-script authenticated-cloud-smoke validate-authenticated-cloud-smoke-script collect-pilot-evidence validate-pilot-evidence-script
 
 test: test-api validate-contracts smoke-policy
 
@@ -40,6 +40,9 @@ validate-cloud-smoke-script:
 validate-authenticated-cloud-smoke-script:
 	python -m py_compile scripts/cloud_run/authenticated_smoke_test_cloud_run.py
 
+validate-pilot-evidence-script:
+	python -m py_compile scripts/cloud_run/collect_pilot_evidence.py
+
 deploy-validate:
 	bash scripts/cloud_run/validate_cloud_run_env.sh all
 
@@ -57,3 +60,6 @@ cloud-smoke:
 
 authenticated-cloud-smoke:
 	python scripts/cloud_run/authenticated_smoke_test_cloud_run.py
+
+collect-pilot-evidence:
+	python scripts/cloud_run/collect_pilot_evidence.py
