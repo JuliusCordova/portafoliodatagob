@@ -192,6 +192,7 @@ button {
 }
 
 button:hover { filter: brightness(0.95); }
+button:disabled { cursor: not-allowed; opacity: 0.62; }
 
 .pill {
   display: inline-flex;
@@ -264,10 +265,159 @@ button:hover { filter: brightness(0.95); }
 
 .gap-list li { margin-bottom: 10px; }
 
+.backlog-card { margin-top: 22px; }
+
+.secondary-button {
+  width: auto;
+  min-width: max-content;
+  margin-top: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  background: #f8fafc;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.backlog-cockpit {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(340px, 0.7fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.backlog-table-wrap {
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+}
+
+.backlog-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 760px;
+  background: white;
+}
+
+.backlog-table th,
+.backlog-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+  font-size: 13px;
+}
+
+.backlog-table th {
+  color: var(--muted);
+  background: #f8fafc;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.backlog-table tr { cursor: pointer; }
+.backlog-table tr:hover td { background: #f8fafc; }
+.backlog-table tr.active-row td { background: var(--blue-soft); }
+.backlog-table td strong { display: block; margin-bottom: 5px; }
+.backlog-table td small { display: block; max-width: 280px; color: var(--muted); line-height: 1.35; }
+
+.empty-state,
+.empty-detail {
+  padding: 28px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.demand-detail {
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: #f8fafc;
+  padding: 20px;
+}
+
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.detail-header span {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.detail-header h3 { margin-bottom: 0; font-size: 22px; letter-spacing: -0.03em; }
+.demand-detail h4 { margin: 16px 0 8px; }
+.demand-detail p { color: var(--muted); line-height: 1.55; }
+
+.detail-kv {
+  display: grid;
+  grid-template-columns: 0.8fr 1.2fr;
+  gap: 8px 12px;
+  margin-top: 16px;
+  padding: 16px;
+  border-radius: 18px;
+  background: white;
+  border: 1px solid var(--line);
+}
+
+.detail-kv span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.detail-kv strong {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.action-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.action-row .secondary-button {
+  width: 100%;
+  min-width: 0;
+  padding: 11px 10px;
+  font-size: 12px;
+}
+
+.ok-action { background: var(--green-soft); color: var(--green); border-color: rgba(21, 128, 61, 0.18); }
+.warn-action { background: var(--amber-soft); color: var(--amber); border-color: rgba(180, 83, 9, 0.18); }
+.risk-action { background: var(--red-soft); color: var(--red); border-color: rgba(185, 28, 28, 0.18); }
+
+.timeline {
+  margin-top: 22px;
+}
+
+.timeline-event {
+  position: relative;
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: white;
+}
+
+.timeline-event strong { display: block; margin-bottom: 4px; }
+.timeline-event span { display: block; color: var(--muted); font-size: 12px; }
+.timeline-event p { margin: 8px 0 0; font-size: 13px; }
+
 @media (max-width: 980px) {
   .hero, .main-grid { grid-template-columns: 1fr; display: grid; }
   .metrics-grid, .gaps-grid { grid-template-columns: repeat(2, 1fr); }
   .architecture-flow { grid-template-columns: repeat(2, 1fr); }
+  .backlog-cockpit { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 640px) {
@@ -276,4 +426,5 @@ button:hover { filter: brightness(0.95); }
   .metrics-grid, .gaps-grid { grid-template-columns: 1fr; }
   .section-title-row, .status-card { flex-direction: column; }
   .status-card span { text-align: left; }
+  .action-row { grid-template-columns: 1fr; }
 }
