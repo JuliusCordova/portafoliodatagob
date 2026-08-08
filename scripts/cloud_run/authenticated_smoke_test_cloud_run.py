@@ -125,6 +125,15 @@ def main() -> int:
         assert "supported_roles" in payload, payload
         return "API permissions reachable with allowed identity"
 
+    def api_operational_readiness_positive() -> str:
+        status, payload = request_json(f"{api_url}/ops/readiness", headers=allowed_headers)
+        assert status == 200, payload
+        assert payload.get("snapshot_type") == "pilot_operational_readiness", payload
+        assert payload.get("status") in {"ok", "warning", "critical"}, payload
+        portfolio = payload.get("portfolio", {})
+        assert "total_demands" in portfolio, payload
+        return f"Operational readiness reachable, status={payload.get('status')}, total_demands={portfolio.get('total_demands')}"
+
     def api_demo_cases_positive() -> str:
         status, payload = request_json(f"{api_url}/demo/cases", headers=allowed_headers)
         assert status == 200, payload
@@ -156,6 +165,7 @@ def main() -> int:
         return f"Web proxy can read demo cases with propagated identity, count={count}"
 
     results.append(retry_check("api_permissions_positive", api_permissions_positive))
+    results.append(retry_check("api_operational_readiness_positive", api_operational_readiness_positive))
     results.append(retry_check("api_demo_cases_positive", api_demo_cases_positive))
     results.append(retry_check("api_demo_reset_negative", api_demo_reset_negative, attempts=1))
     results.append(retry_check("web_session_positive", web_session_positive))
