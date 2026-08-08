@@ -1,0 +1,4 @@
+# ATLAS DataGob Web · Cloud Run environment example
+# Used by Next.js server-side proxy routes.
+
+ATLAS_INTERNAL_API_BASE=https://<api-cloud-run-url>
