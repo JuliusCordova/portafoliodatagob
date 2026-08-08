@@ -1,9 +1,9 @@
 """Local demand backlog persistence for ATLAS DataGob.
 
-This module intentionally uses a lightweight JSON store for the MVP. It keeps
-requests, validation outputs, committee decisions and lifecycle events in one
-place so the product can demonstrate traceability before moving to a managed
-store such as Firestore, AlloyDB, Cloud SQL or BigQuery.
+This module keeps the public backlog operations used by the API, CRUD grid,
+scoring workflow and demo reset. Persistence is delegated to a repository
+adapter so the MVP can keep local JSON today and move later to a managed store
+without rewriting the business flow.
 """
 from __future__ import annotations
 
@@ -14,11 +14,9 @@ from uuid import uuid4
 
 from atlas_datagob.services.demand_lifecycle import (
     DEMAND_RECORD_SCHEMA_VERSION,
-    VALID_DEMAND_STATUSES,
     assert_transition_allowed,
-    normalize_and_validate_records,
-    normalize_demand_record,
 )
+from atlas_datagob.services.demand_repository import demand_repository_for
 
 DEFAULT_BACKLOG_PATH = Path("data/runtime/demand_backlog.json")
 DEMO_SEED_PATH = Path("data/demo/demand_backlog_seed.json")
@@ -74,27 +72,15 @@ def _clone_records(records: list[dict]) -> list[dict]:
 
 
 def load_demand_records(path: str | Path = DEFAULT_BACKLOG_PATH) -> list[dict]:
-    """Load all demand records from the JSON backlog."""
+    """Load all demand records through the configured repository adapter."""
 
-    backlog_path = Path(path)
-    if not backlog_path.exists():
-        return []
-    with backlog_path.open("r", encoding="utf-8") as file:
-        payload = json.load(file)
-    if isinstance(payload, list):
-        return [normalize_demand_record(record) for record in payload]
-    raise ValueError(f"Invalid demand backlog payload in {backlog_path}")
+    return demand_repository_for(path).load_all()
 
 
 def write_demand_records(records: list[dict], path: str | Path = DEFAULT_BACKLOG_PATH) -> None:
-    """Persist all demand records to the JSON backlog."""
+    """Persist all demand records through the configured repository adapter."""
 
-    normalized_records = normalize_and_validate_records(records)
-    backlog_path = Path(path)
-    backlog_path.parent.mkdir(parents=True, exist_ok=True)
-    with backlog_path.open("w", encoding="utf-8") as file:
-        json.dump(normalized_records, file, indent=2, ensure_ascii=False)
-        file.write("\n")
+    demand_repository_for(path).replace_all(records)
 
 
 def load_demo_seed_records(seed_path: str | Path = DEMO_SEED_PATH) -> list[dict]:
