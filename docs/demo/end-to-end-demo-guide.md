@@ -2,13 +2,29 @@
 
 ## Objetivo
 
-Ejecutar una demo repetible de ATLAS DataGob sin depender de captura manual desde cero. La demo usa un backlog semilla con tres tipos de caso:
+Ejecutar una demo repetible de ATLAS DataGob sin depender de captura manual desde cero. La demo usa **10 demandas sintéticas semilla**, materializadas en el modelo runtime del backlog.
 
-1. Caso ya priorizado con score alto.
-2. Caso en revisión del Comité Operativo.
-3. Caso enviado a reformulación.
+La data no está hardcodeada en la UI. Se guarda como registros reales del modelo de datos local en:
 
-## 1. Levantar backend
+```text
+data/runtime/demand_backlog.json
+```
+
+El seed versionado está en:
+
+```text
+data/demo/demand_backlog_seed.json
+```
+
+## 1. Materializar data sintética en el modelo runtime
+
+```bash
+make seed-demo
+```
+
+Este comando carga las 10 demandas sintéticas desde `data/demo/demand_backlog_seed.json` y las persiste como registros del backlog en `data/runtime/demand_backlog.json`.
+
+## 2. Levantar backend
 
 ```bash
 make dev-api
@@ -20,7 +36,7 @@ Validar salud:
 curl http://localhost:8000/health
 ```
 
-## 2. Resetear backlog de demo
+## 3. Resetear backlog de demo desde API
 
 ```bash
 curl -X POST http://localhost:8000/demo/reset
@@ -28,14 +44,16 @@ curl -X POST http://localhost:8000/demo/reset
 
 Esto reemplaza el archivo runtime local `data/runtime/demand_backlog.json` por los casos curados de `data/demo/demand_backlog_seed.json` y agrega un evento auditable `demo_reset`.
 
-## 3. Revisar casos semilla
+## 4. Revisar casos semilla y backlog persistido
 
 ```bash
 curl http://localhost:8000/demo/cases
 curl http://localhost:8000/demands/backlog
 ```
 
-## 4. Levantar frontend
+La respuesta de `/demands/backlog` debe mostrar mínimo 10 demandas `DEM-DEMO-*` porque ya están persistidas en el modelo runtime.
+
+## 5. Levantar frontend
 
 ```bash
 cd apps/web
@@ -45,7 +63,7 @@ npm run dev -- -H 0.0.0.0 -p 3000
 
 En Cloud Shell, abrir el puerto 3000 desde Web Preview.
 
-## 5. Storyline sugerido
+## 6. Storyline sugerido
 
 ### Escena 1 · Intake negocio
 
@@ -53,7 +71,7 @@ Mostrar cómo el Data Owner registra una nueva demanda con valor de negocio, sup
 
 ### Escena 2 · Comité Operativo
 
-Abrir la grilla, filtrar por dominio o área, seleccionar `DEM-DEMO-002` y explicar que está pendiente de completar checklist técnico/gobierno.
+Abrir la grilla, filtrar por dominio o área, seleccionar `DEM-DEMO-002` o `DEM-DEMO-006` y explicar que está pendiente de completar checklist técnico/gobierno.
 
 Completar o ajustar:
 
@@ -80,11 +98,15 @@ Cambiar a Tablero Ejecutivo y mostrar:
 - VAN/ROI/Payback cuando existan datos.
 - Brechas agregadas.
 
-### Escena 5 · Reformulación o cierre lógico
+### Escena 5 · Reformulación, rechazo o MVP
 
-Seleccionar `DEM-DEMO-003` para mostrar una demanda incompleta, con brechas relevantes y decisión de reformulación.
+Seleccionar:
 
-## 6. Validaciones locales recomendadas
+- `DEM-DEMO-003` para reformulación.
+- `DEM-DEMO-008` para rechazo/cierre lógico.
+- `DEM-DEMO-010` para candidato a MVP.
+
+## 7. Validaciones locales recomendadas
 
 Backend:
 
@@ -100,6 +122,6 @@ cd apps/web
 npm run verify
 ```
 
-## 7. Mensaje ejecutivo de cierre
+## 8. Mensaje ejecutivo de cierre
 
 ATLAS DataGob convierte la gestión de demanda de datos en un flujo gobernado, trazable y priorizable: negocio captura valor, los agentes estructuran y validan, el comité completa gobierno/arquitectura, y la dirección decide con evidencia.
