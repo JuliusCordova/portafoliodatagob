@@ -17,9 +17,15 @@ from atlas_datagob.services.demand_lifecycle import (
     assert_transition_allowed,
 )
 from atlas_datagob.services.demand_repository import demand_repository_for
+from atlas_datagob.services.persistence_config import (
+    DEFAULT_DEMAND_BACKLOG_PATH,
+    DEFAULT_DEMO_SEED_PATH,
+    demand_backlog_path,
+    demo_seed_path,
+)
 
-DEFAULT_BACKLOG_PATH = Path("data/runtime/demand_backlog.json")
-DEMO_SEED_PATH = Path("data/demo/demand_backlog_seed.json")
+DEFAULT_BACKLOG_PATH = DEFAULT_DEMAND_BACKLOG_PATH
+DEMO_SEED_PATH = DEFAULT_DEMO_SEED_PATH
 
 _EDITABLE_REQUEST_FIELDS = {
     "title",
@@ -29,6 +35,14 @@ _EDITABLE_REQUEST_FIELDS = {
     "domain_hint",
     "target_consumption",
 }
+
+
+def _runtime_backlog_path(path: str | Path | None = None) -> Path:
+    return Path(path) if path is not None else demand_backlog_path()
+
+
+def _runtime_seed_path(path: str | Path | None = None) -> Path:
+    return Path(path) if path is not None else demo_seed_path()
 
 
 def utc_now() -> str:
@@ -71,31 +85,31 @@ def _clone_records(records: list[dict]) -> list[dict]:
     return json.loads(json.dumps(records))
 
 
-def load_demand_records(path: str | Path = DEFAULT_BACKLOG_PATH) -> list[dict]:
+def load_demand_records(path: str | Path | None = None) -> list[dict]:
     """Load all demand records through the configured repository adapter."""
 
-    return demand_repository_for(path).load_all()
+    return demand_repository_for(_runtime_backlog_path(path)).load_all()
 
 
-def write_demand_records(records: list[dict], path: str | Path = DEFAULT_BACKLOG_PATH) -> None:
+def write_demand_records(records: list[dict], path: str | Path | None = None) -> None:
     """Persist all demand records through the configured repository adapter."""
 
-    demand_repository_for(path).replace_all(records)
+    demand_repository_for(_runtime_backlog_path(path)).replace_all(records)
 
 
-def load_demo_seed_records(seed_path: str | Path = DEMO_SEED_PATH) -> list[dict]:
+def load_demo_seed_records(seed_path: str | Path | None = None) -> list[dict]:
     """Load curated records used to reset and rehearse product demos."""
 
-    records = load_demand_records(seed_path)
+    records = load_demand_records(_runtime_seed_path(seed_path))
     if not records:
-        raise ValueError(f"Demo seed file has no records: {seed_path}")
+        raise ValueError(f"Demo seed file has no records: {_runtime_seed_path(seed_path)}")
     return records
 
 
 def reset_demo_backlog(
     *,
-    seed_path: str | Path = DEMO_SEED_PATH,
-    path: str | Path = DEFAULT_BACKLOG_PATH,
+    seed_path: str | Path | None = None,
+    path: str | Path | None = None,
     actor: str = "ATLAS DataGob",
 ) -> list[dict]:
     """Replace the runtime backlog with curated demo records and audit the reset."""
@@ -149,7 +163,7 @@ def demand_id_for(now: str) -> str:
 def create_demand_record(
     validation_result: dict,
     *,
-    path: str | Path = DEFAULT_BACKLOG_PATH,
+    path: str | Path | None = None,
     actor: str = "ATLAS DataGob",
 ) -> dict:
     """Create and persist a demand record from a policy/architecture validation result."""
@@ -199,7 +213,7 @@ def create_demand_record(
     return record
 
 
-def list_demand_records(status: str | None = None, path: str | Path = DEFAULT_BACKLOG_PATH) -> list[dict]:
+def list_demand_records(status: str | None = None, path: str | Path | None = None) -> list[dict]:
     """List demand records, newest first, optionally filtered by status."""
 
     records = load_demand_records(path)
@@ -208,7 +222,7 @@ def list_demand_records(status: str | None = None, path: str | Path = DEFAULT_BA
     return sorted(records, key=lambda item: item.get("created_at", ""), reverse=True)
 
 
-def get_demand_record(demand_id: str, path: str | Path = DEFAULT_BACKLOG_PATH) -> dict | None:
+def get_demand_record(demand_id: str, path: str | Path | None = None) -> dict | None:
     """Return one demand record by id."""
 
     for record in load_demand_records(path):
@@ -227,7 +241,7 @@ def update_demand_record(
     decision: str | None = None,
     actor: str = "Data Steward",
     comment: str | None = None,
-    path: str | Path = DEFAULT_BACKLOG_PATH,
+    path: str | Path | None = None,
 ) -> dict | None:
     """Update editable demand fields and append an audit event."""
 
@@ -281,7 +295,7 @@ def update_demand_record_status(
     decision: str | None = None,
     comment: str | None = None,
     actor: str = "Data Architect",
-    path: str | Path = DEFAULT_BACKLOG_PATH,
+    path: str | Path | None = None,
 ) -> dict | None:
     """Update the status/decision of one demand record and append an audit event."""
 
@@ -318,7 +332,7 @@ def update_demand_record_scoring(
     scoring_result: dict,
     actor: str = "Portfolio Owner",
     comment: str | None = None,
-    path: str | Path = DEFAULT_BACKLOG_PATH,
+    path: str | Path | None = None,
 ) -> dict | None:
     """Attach scoring and financial metrics to one demand record with audit trail."""
 
