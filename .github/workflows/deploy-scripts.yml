@@ -1,0 +1,13 @@
+name: Deploy scripts
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  deploy-scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Cloud Run deploy scripts
+        run: make validate-deploy-scripts
