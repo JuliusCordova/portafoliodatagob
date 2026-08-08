@@ -11,6 +11,10 @@ type WebSession = {
   source: string;
 };
 
+type SessionResponse = {
+  session: WebSession;
+};
+
 type NavigationItem = {
   href: string;
   label: string;
@@ -59,8 +63,8 @@ export default function ProductNavigation() {
       try {
         const response = await fetch("/api/session", { cache: "no-store" });
         if (!response.ok) return;
-        const payload = (await response.json()) as WebSession;
-        if (mounted) setSession(payload);
+        const payload = (await response.json()) as SessionResponse;
+        if (mounted) setSession(payload.session);
       } catch {
         if (mounted) setSession(null);
       }
