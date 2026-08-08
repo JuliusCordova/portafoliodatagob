@@ -1,0 +1,41 @@
+import { NextResponse } from "next/server";
+
+export async function GET(request: Request) {
+  const backendBaseUrl = process.env.ATLAS_INTERNAL_API_BASE ?? "http://localhost:8000";
+  const { searchParams } = new URL(request.url);
+  const status = searchParams.get("status");
+  const targetUrl = new URL(`${backendBaseUrl}/demands/backlog`);
+
+  if (status) {
+    targetUrl.searchParams.set("status", status);
+  }
+
+  try {
+    const response = await fetch(targetUrl.toString(), {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store"
+    });
+
+    const text = await response.text();
+    const contentType = response.headers.get("content-type") ?? "application/json";
+
+    return new Response(text, {
+      status: response.status,
+      headers: {
+        "content-type": contentType,
+        "x-atlas-proxy-target": backendBaseUrl
+      }
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown backlog proxy error";
+    return NextResponse.json(
+      {
+        error: "ATLAS_NEXT_BACKLOG_PROXY_ERROR",
+        message,
+        backend_base_url: backendBaseUrl
+      },
+      { status: 502 }
+    );
+  }
+}
