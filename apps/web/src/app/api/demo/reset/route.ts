@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
+import { atlasJsonProxyHeaders } from "../../_lib/identity";
 
-export async function POST() {
+export async function POST(request: Request) {
   const backendBaseUrl = process.env.ATLAS_INTERNAL_API_BASE ?? "http://localhost:8000";
 
   try {
     const response = await fetch(`${backendBaseUrl}/demo/reset`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: atlasJsonProxyHeaders(request),
       cache: "no-store"
     });
 
