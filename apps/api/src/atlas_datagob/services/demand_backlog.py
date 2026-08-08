@@ -12,22 +12,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
+from atlas_datagob.services.demand_lifecycle import (
+    DEMAND_RECORD_SCHEMA_VERSION,
+    VALID_DEMAND_STATUSES,
+    assert_transition_allowed,
+    normalize_and_validate_records,
+    normalize_demand_record,
+)
+
 DEFAULT_BACKLOG_PATH = Path("data/runtime/demand_backlog.json")
 DEMO_SEED_PATH = Path("data/demo/demand_backlog_seed.json")
-
-VALID_DEMAND_STATUSES = {
-    "draft",
-    "intake_validated",
-    "operative_committee_review",
-    "reformulation_required",
-    "approved_for_scoring",
-    "scored",
-    "rejected",
-    "closed",
-    "archived",
-    "mvp_candidate",
-    "production_candidate",
-}
 
 _EDITABLE_REQUEST_FIELDS = {
     "title",
@@ -88,17 +82,18 @@ def load_demand_records(path: str | Path = DEFAULT_BACKLOG_PATH) -> list[dict]:
     with backlog_path.open("r", encoding="utf-8") as file:
         payload = json.load(file)
     if isinstance(payload, list):
-        return payload
+        return [normalize_demand_record(record) for record in payload]
     raise ValueError(f"Invalid demand backlog payload in {backlog_path}")
 
 
 def write_demand_records(records: list[dict], path: str | Path = DEFAULT_BACKLOG_PATH) -> None:
     """Persist all demand records to the JSON backlog."""
 
+    normalized_records = normalize_and_validate_records(records)
     backlog_path = Path(path)
     backlog_path.parent.mkdir(parents=True, exist_ok=True)
     with backlog_path.open("w", encoding="utf-8") as file:
-        json.dump(records, file, indent=2, ensure_ascii=False)
+        json.dump(normalized_records, file, indent=2, ensure_ascii=False)
         file.write("\n")
 
 
@@ -123,6 +118,8 @@ def reset_demo_backlog(
     now = utc_now()
     for record in records:
         status = record.get("status", "intake_validated")
+        assert_transition_allowed(status, status)
+        record["schema_version"] = DEMAND_RECORD_SCHEMA_VERSION
         record["updated_at"] = now
         record.setdefault("events", []).append(
             _event(
@@ -179,6 +176,7 @@ def create_demand_record(
     current_stage = committee.get("committee_stage") or committee.get("route") or "intake_validated"
 
     record = {
+        "schema_version": DEMAND_RECORD_SCHEMA_VERSION,
         "demand_id": demand_id_for(now),
         "created_at": now,
         "updated_at": now,
@@ -239,7 +237,7 @@ def update_demand_record(
     request_update: dict | None = None,
     business_inputs: dict | None = None,
     committee_inputs: dict | None = None,
-    validation_state: str | None = None,
+    validation_state: dict | str | None = None,
     decision: str | None = None,
     actor: str = "Data Steward",
     comment: str | None = None,
@@ -272,6 +270,7 @@ def update_demand_record(
         if decision:
             record["decision"] = decision
 
+        record["schema_version"] = DEMAND_RECORD_SCHEMA_VERSION
         record["updated_at"] = now
         record.setdefault("events", []).append(
             _event(
@@ -300,15 +299,14 @@ def update_demand_record_status(
 ) -> dict | None:
     """Update the status/decision of one demand record and append an audit event."""
 
-    if status not in VALID_DEMAND_STATUSES:
-        raise ValueError(f"Invalid demand status: {status}")
-
     records = load_demand_records(path)
     now = utc_now()
     for record in records:
         if record.get("demand_id") != demand_id:
             continue
         previous_status = record.get("status")
+        assert_transition_allowed(previous_status, status)
+        record["schema_version"] = DEMAND_RECORD_SCHEMA_VERSION
         record["status"] = status
         record["decision"] = decision or record.get("decision") or status
         record["updated_at"] = now
@@ -344,6 +342,8 @@ def update_demand_record_scoring(
         if record.get("demand_id") != demand_id:
             continue
         previous_status = record.get("status")
+        assert_transition_allowed(previous_status, "scored")
+        record["schema_version"] = DEMAND_RECORD_SCHEMA_VERSION
         record["scoring"] = {
             "score": scoring_result["score"],
             "priority": scoring_result["priority"],
