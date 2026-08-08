@@ -1,6 +1,7 @@
 import "./globals.css";
 import DemoControls from "./components/DemoControls";
 import ExecutiveDemoRibbon from "./components/ExecutiveDemoRibbon";
+import ProductNavigation from "./components/ProductNavigation";
 import SessionBanner from "./components/SessionBanner";
 
 export const metadata = {
@@ -14,6 +15,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <ExecutiveDemoRibbon />
         <SessionBanner />
+        <ProductNavigation />
         {children}
         <DemoControls />
       </body>
