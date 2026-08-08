@@ -42,6 +42,13 @@ const navigationItems: NavigationItem[] = [
     description: "Paquete ejecutivo imprimible y evidencia de decisión",
     requiredRoles: ["executive", "committee_member", "data_architect", "platform_admin"],
     guardrail: "Requiere rol ejecutivo, comité o arquitectura para revisar paquetes"
+  },
+  {
+    href: "/sponsor-followup",
+    label: "Sponsor follow-up",
+    description: "SLA, vencimientos y cola ejecutiva de seguimiento",
+    requiredRoles: ["executive", "committee_member", "data_architect", "platform_admin"],
+    guardrail: "Requiere rol ejecutivo, comité o arquitectura para ver seguimiento sponsor"
   }
 ];
 
