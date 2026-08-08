@@ -219,24 +219,99 @@ function buildTimeline(demand: DemandRecord | null): TimelineItem[] {
     });
   });
 
+  if (!items.length) {
+    items.push({
+      id: `${demand.demand_id}-created`,
+      timestamp: demand.created_at,
+      title: "Demanda registrada",
+      detail: "Registro inicial disponible sin eventos adicionales.",
+      actor: demand.request.requester_role || demand.request.requester_area,
+      toStatus: demand.status,
+      source: "system",
+      tone: "info"
+    });
+  }
+
   return items.sort((left, right) => new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime());
 }
 
-function decisionHistorySummary(demand: DemandRecord | null) {
-  if (!demand) return [];
+function buildEvidencePacket(demand: DemandRecord | null, timeline: TimelineItem[]) {
+  if (!demand) return "Selecciona una demanda para generar el paquete de evidencia.";
+
   const committee = demand.committee_inputs ?? {};
-  return [
-    { label: "Recomendación previa", value: labelize(asText(committee.committee_recommendation, suggestedDecision(demand))) },
-    { label: "Decisión final", value: labelize(asText(committee.committee_final_decision, demand.decision)) },
-    { label: "Estado final", value: labelize(asText(committee.committee_final_status, demand.status)) },
-    { label: "Actor", value: asText(committee.committee_decision_recorded_by, "Pendiente") },
-    { label: "Roles", value: asTextArray(committee.committee_decision_recorded_roles).join(", ") || "Pendiente" },
-    { label: "Fecha", value: formatDate(asText(committee.committee_decision_recorded_at, demand.updated_at)) }
+  const roles = asTextArray(committee.committee_decision_recorded_roles).join(", ") || "No registrado";
+  const finalDecision = asText(committee.committee_final_decision, demand.decision || "pending_committee_decision");
+  const finalStatus = asText(committee.committee_final_status, demand.status);
+  const reason = asText(committee.committee_reason, "No registrado");
+  const conditions = asText(committee.committee_conditions, "No registradas");
+  const risk = asText(committee.committee_risk_level, "No registrado");
+  const actor = asText(committee.committee_decision_recorded_by, "No registrado");
+  const recordedAt = asText(committee.committee_decision_recorded_at, demand.updated_at);
+
+  const lines = [
+    `# Paquete de evidencia de decisión - ${demand.request.title}`,
+    "",
+    "## 1. Identificación",
+    `- ID de demanda: ${demand.demand_id}`,
+    `- Área solicitante: ${demand.request.requester_area}`,
+    `- Rol solicitante: ${demand.request.requester_role}`,
+    `- Dominio sugerido: ${demand.request.domain_hint || "No definido"}`,
+    `- Consumo objetivo: ${demand.request.target_consumption || "No definido"}`,
+    `- Creada: ${formatDate(demand.created_at)}`,
+    `- Última actualización: ${formatDate(demand.updated_at)}`,
+    "",
+    "## 2. Descripción ejecutiva",
+    demand.request.description || "No registrada",
+    "",
+    "## 3. Decisión de comité",
+    `- Recomendación previa: ${labelize(suggestedDecision(demand))}`,
+    `- Decisión final: ${labelize(finalDecision)}`,
+    `- Estado final: ${labelize(finalStatus)}`,
+    `- Riesgo percibido: ${labelize(risk)}`,
+    `- Actor: ${actor}`,
+    `- Roles: ${roles}`,
+    `- Fecha de decisión: ${formatDate(recordedAt)}`,
+    "",
+    "## 4. Justificación",
+    reason,
+    "",
+    "## 5. Condiciones y próximos pasos",
+    conditions,
+    "",
+    ...nextStepsFor(finalDecision).map((step) => `- ${step}`),
+    "",
+    "## 6. Brechas relevantes",
+    `- Política: ${demand.policy_gaps.length ? demand.policy_gaps.join("; ") : "Sin brechas registradas"}`,
+    `- Arquitectura: ${demand.architecture_gaps.length ? demand.architecture_gaps.join("; ") : "Sin brechas registradas"}`,
+    `- FinOps: ${demand.finops_gaps.length ? demand.finops_gaps.join("; ") : "Sin brechas registradas"}`,
+    "",
+    "## 7. Timeline de evidencia",
+    ...timeline.map(
+      (item) =>
+        `- ${formatDate(item.timestamp)} | ${item.title} | Actor: ${item.actor} | Decisión: ${labelize(item.decision)} | Estado: ${labelize(item.fromStatus)} → ${labelize(item.toStatus)} | ${item.detail}`
+    ),
+    "",
+    "## 8. Nota de control",
+    "Este paquete resume la evidencia disponible en ATLAS DataGob para revisión de comité, sponsor o auditoría. No reemplaza aprobaciones formales externas ni documentación contractual."
   ];
+
+  return lines.join("\n");
 }
 
-function latestTimelineItem(demand: DemandRecord) {
-  return buildTimeline(demand)[0];
+function fileSafeName(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "")
+    .slice(0, 80);
+}
+
+function fieldStyle() {
+  return { padding: 12, borderRadius: 12, border: "1px solid #d0d5dd", background: "white" };
+}
+
+function panelStyle() {
+  return { padding: 24, borderRadius: 24, background: "white", border: "1px solid #eaecf0" };
 }
 
 export default function CommitteeDecisionPage() {
@@ -244,11 +319,11 @@ export default function CommitteeDecisionPage() {
   const [selectedDemandId, setSelectedDemandId] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [packetCopied, setPacketCopied] = useState(false);
   const [feedback, setFeedback] = useState<ActionFeedback>({
     tone: "info",
     title: "Sesión de comité lista",
-    detail: "Carga el backlog para iniciar la revisión de decisiones.",
-    nextSteps: ["Selecciona una demanda.", "Revisa recomendación y brechas.", "Registra decisión con justificación."]
+    detail: "Carga el backlog, selecciona una demanda y registra una decisión con evidencia suficiente."
   });
   const [finalDecision, setFinalDecision] = useState("approved_for_scoring");
   const [riskLevel, setRiskLevel] = useState("medium");
@@ -259,18 +334,19 @@ export default function CommitteeDecisionPage() {
     () => demands.find((item) => item.demand_id === selectedDemandId) ?? null,
     [demands, selectedDemandId]
   );
-
   const reviewQueue = useMemo(
     () => demands.filter((item) => !hasDecision(item) && !["closed", "archived", "rejected"].includes(item.status)),
     [demands]
   );
-
   const decidedItems = useMemo(() => demands.filter(hasDecision), [demands]);
-  const timelineItems = useMemo(() => buildTimeline(selectedDemand), [selectedDemand]);
-  const historySummary = useMemo(() => decisionHistorySummary(selectedDemand), [selectedDemand]);
   const selectedOption = decisionOptions.find((item) => item.value === finalDecision) ?? decisionOptions[0];
+  const selectedTone = toneColors(selectedOption.tone);
+  const selectedTimeline = useMemo(() => buildTimeline(selectedDemand), [selectedDemand]);
+  const evidencePacket = useMemo(() => buildEvidencePacket(selectedDemand, selectedTimeline), [selectedDemand, selectedTimeline]);
+  const currentCommittee = selectedDemand?.committee_inputs ?? {};
+  const finalDecisionRecorded = asText(currentCommittee.committee_final_decision, selectedDemand?.decision ?? "");
   const feedbackColors = toneColors(feedback.tone);
-  const decisionReady = Boolean(selectedDemand && reason.trim().length >= 10 && !saving);
+  const canSubmit = Boolean(selectedDemand && reason.trim().length >= 10 && !saving);
 
   async function loadBacklog(highlightId?: string) {
     try {
@@ -282,20 +358,15 @@ export default function CommitteeDecisionPage() {
       setDemands(payload.demands);
       const nextSelection = highlightId || selectedDemandId || payload.demands[0]?.demand_id || "";
       setSelectedDemandId(nextSelection);
+      setPacketCopied(false);
       setFeedback({
         tone: "success",
         title: "Backlog sincronizado",
-        detail: `${payload.count} demandas cargadas. ${payload.demands.filter((item) => !hasDecision(item)).length} siguen pendientes de decisión formal.`,
-        nextSteps: ["Selecciona una demanda.", "Revisa su historia.", "Registra o valida la decisión de comité."]
+        detail: `Se cargaron ${payload.count} demandas. Pendientes de decisión: ${payload.demands.filter((item) => !hasDecision(item)).length}.`
       });
     } catch (error) {
       const detail = error instanceof Error ? error.message : "Error desconocido";
-      setFeedback({
-        tone: "error",
-        title: "No se pudo cargar el backlog",
-        detail,
-        nextSteps: ["Verifica que el API esté activo.", "Revisa ATLAS_INTERNAL_API_BASE.", "Intenta sincronizar nuevamente."]
-      });
+      setFeedback({ tone: "error", title: "No se pudo cargar el backlog", detail });
     } finally {
       setLoading(false);
     }
@@ -308,41 +379,34 @@ export default function CommitteeDecisionPage() {
 
   function selectDemand(demand: DemandRecord) {
     setSelectedDemandId(demand.demand_id);
+    setPacketCopied(false);
     const suggested = demand.committee?.suggested_decision;
     if (suggested === "reformulation_required" || suggested === "rejected" || suggested === "approved_for_scoring") {
       setFinalDecision(suggested);
     } else if (suggested === "architect_review") {
       setFinalDecision("architecture_exception");
     }
-    const latest = latestTimelineItem(demand);
     setFeedback({
       tone: hasDecision(demand) ? "success" : "info",
       title: hasDecision(demand) ? "Demanda con decisión registrada" : "Demanda seleccionada",
-      detail: latest ? `Último evento: ${latest.title} · ${formatDate(latest.timestamp)}` : `Demanda seleccionada: ${demand.demand_id}`,
-      nextSteps: hasDecision(demand)
-        ? ["Revisa el resumen histórico.", "Valida condiciones y actor.", "Continúa con scoring o cierre según corresponda."]
-        : ["Revisa recomendación del agente.", "Evalúa brechas y riesgo.", "Registra decisión con justificación."]
+      detail: `${demand.demand_id} · ${demand.request.title}`,
+      nextSteps: hasDecision(demand) ? ["Revisar timeline.", "Generar o copiar paquete de evidencia."] : ["Validar recomendación.", "Registrar decisión con justificación mínima."]
     });
   }
 
   async function submitDecision() {
     if (!selectedDemand) {
-      setFeedback({ tone: "warning", title: "Sin demanda seleccionada", detail: "Selecciona una demanda antes de registrar decisión." });
+      setFeedback({ tone: "warning", title: "Selecciona una demanda", detail: "Debes elegir una demanda antes de registrar decisión." });
       return;
     }
     if (reason.trim().length < 10) {
-      setFeedback({ tone: "warning", title: "Falta justificación", detail: "Agrega una justificación mínima para dejar trazabilidad de comité." });
+      setFeedback({ tone: "warning", title: "Falta justificación", detail: "Agrega una justificación mínima para dejar trazabilidad." });
       return;
     }
 
     try {
       setSaving(true);
-      setFeedback({
-        tone: "info",
-        title: "Registrando decisión",
-        detail: "ATLAS está persistiendo la decisión, actualizando estado y generando trazabilidad.",
-        nextSteps: ["Mantén esta pantalla abierta.", "Espera confirmación del backend."]
-      });
+      setFeedback({ tone: "info", title: "Registrando decisión", detail: "El Comité Operativo está actualizando estado y evidencia de la demanda." });
       const response = await fetch("/api/demands/committee-decision", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -363,33 +427,53 @@ export default function CommitteeDecisionPage() {
       setDemands((items) => items.map((item) => (item.demand_id === payload.demand.demand_id ? payload.demand : item)));
       setFeedback({
         tone: selectedOption.tone,
-        title: "Decisión registrada",
-        detail: `${labelize(String(payload.committee_decision.committee_final_decision))} · Estado: ${labelize(payload.demand.status)}.`,
+        title: `Decisión registrada: ${labelize(String(payload.committee_decision.committee_final_decision))}`,
+        detail: `Estado actualizado: ${labelize(payload.demand.status)}. El paquete de evidencia queda disponible para copiar o descargar.`,
         nextSteps: nextStepsFor(finalDecision)
       });
       await loadBacklog(payload.demand.demand_id);
     } catch (error) {
       const detail = error instanceof Error ? error.message : "Error desconocido";
-      setFeedback({
-        tone: "error",
-        title: "No se pudo registrar la decisión",
-        detail,
-        nextSteps: ["Revisa rol de sesión.", "Confirma que la demanda permite transición de estado.", "Vuelve a sincronizar backlog."]
-      });
+      setFeedback({ tone: "error", title: "No se pudo registrar la decisión", detail });
     } finally {
       setSaving(false);
     }
   }
 
+  async function copyEvidencePacket() {
+    try {
+      await navigator.clipboard.writeText(evidencePacket);
+      setPacketCopied(true);
+      setFeedback({ tone: "success", title: "Paquete copiado", detail: "La evidencia quedó lista en el portapapeles para enviarla a comité, sponsor o auditoría." });
+    } catch {
+      setPacketCopied(false);
+      setFeedback({ tone: "warning", title: "No se pudo copiar automáticamente", detail: "Puedes seleccionar manualmente el texto del paquete de evidencia." });
+    }
+  }
+
+  function downloadEvidencePacket() {
+    if (!selectedDemand) return;
+    const blob = new Blob([evidencePacket], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `atlas-committee-evidence-${fileSafeName(selectedDemand.demand_id)}.md`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setFeedback({ tone: "success", title: "Paquete descargado", detail: "Se generó un archivo Markdown con la evidencia de decisión de comité." });
+  }
+
   return (
     <main style={{ minHeight: "100vh", padding: "40px", background: "#f8fafc", color: "#101828", fontFamily: "Inter, system-ui, sans-serif" }}>
-      <section style={{ maxWidth: 1280, margin: "0 auto", display: "grid", gap: 24 }}>
-        <header style={{ display: "flex", justifyContent: "space-between", gap: 24, alignItems: "flex-start" }}>
+      <section style={{ maxWidth: 1240, margin: "0 auto", display: "grid", gap: 24 }}>
+        <header style={{ display: "flex", justifyContent: "space-between", gap: 24, alignItems: "flex-start", flexWrap: "wrap" }}>
           <div>
             <p style={{ margin: 0, color: "#667085", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>ATLAS DataGob</p>
-            <h1 style={{ margin: "8px 0", fontSize: 40, lineHeight: 1.05 }}>Comité operativo · Timeline</h1>
-            <p style={{ margin: 0, maxWidth: 790, color: "#475467", fontSize: 17 }}>
-              Línea de tiempo enriquecida para revisar decisión final, recomendación previa, actor, condiciones, riesgo y evolución de estado por demanda.
+            <h1 style={{ margin: "8px 0", fontSize: 40, lineHeight: 1.05 }}>Comité operativo</h1>
+            <p style={{ margin: 0, maxWidth: 820, color: "#475467", fontSize: 17 }}>
+              Flujo para registrar decisiones, revisar timeline y generar un paquete de evidencia listo para comité, sponsor o auditoría.
             </p>
           </div>
           <button onClick={() => void loadBacklog()} disabled={loading} style={{ padding: "12px 18px", borderRadius: 999, border: "1px solid #111827", background: "#111827", color: "white", fontWeight: 700 }}>
@@ -398,47 +482,49 @@ export default function CommitteeDecisionPage() {
         </header>
 
         <section style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 16 }}>
-          <article style={{ padding: 20, borderRadius: 20, background: "white", border: "1px solid #eaecf0" }}>
+          <article style={panelStyle()}>
             <span style={{ color: "#667085", fontWeight: 700 }}>Backlog</span>
             <strong style={{ display: "block", fontSize: 32, marginTop: 8 }}>{demands.length}</strong>
             <small>Solicitudes cargadas</small>
           </article>
-          <article style={{ padding: 20, borderRadius: 20, background: "white", border: "1px solid #eaecf0" }}>
+          <article style={panelStyle()}>
             <span style={{ color: "#667085", fontWeight: 700 }}>Pendientes</span>
             <strong style={{ display: "block", fontSize: 32, marginTop: 8 }}>{reviewQueue.length}</strong>
             <small>Sin decisión formal</small>
           </article>
-          <article style={{ padding: 20, borderRadius: 20, background: "white", border: "1px solid #eaecf0" }}>
+          <article style={panelStyle()}>
             <span style={{ color: "#667085", fontWeight: 700 }}>Decididas</span>
             <strong style={{ display: "block", fontSize: 32, marginTop: 8 }}>{decidedItems.length}</strong>
-            <small>Con trazabilidad</small>
+            <small>Con evidencia de comité</small>
           </article>
-          <article style={{ padding: 20, borderRadius: 20, background: "white", border: "1px solid #eaecf0" }}>
-            <span style={{ color: "#667085", fontWeight: 700 }}>Eventos visibles</span>
-            <strong style={{ display: "block", fontSize: 32, marginTop: 8 }}>{timelineItems.length}</strong>
-            <small>Para demanda seleccionada</small>
+          <article style={panelStyle()}>
+            <span style={{ color: "#667085", fontWeight: 700 }}>Eventos demanda</span>
+            <strong style={{ display: "block", fontSize: 32, marginTop: 8 }}>{selectedTimeline.length}</strong>
+            <small>Timeline seleccionado</small>
           </article>
         </section>
 
-        <section style={{ padding: 18, borderRadius: 18, background: feedbackColors.bg, border: `1px solid ${feedbackColors.border}`, color: feedbackColors.text }}>
-          <strong style={{ display: "block", marginBottom: 6 }}>{feedback.title}</strong>
-          <p style={{ margin: 0 }}>{feedback.detail}</p>
+        <section style={{ padding: 18, borderRadius: 18, border: `1px solid ${feedbackColors.border}`, background: feedbackColors.bg, color: feedbackColors.text }}>
+          <strong style={{ display: "block", marginBottom: 4 }}>{feedback.title}</strong>
+          <span>{feedback.detail}</span>
           {feedback.nextSteps?.length ? (
             <ul style={{ margin: "10px 0 0", paddingLeft: 20 }}>
-              {feedback.nextSteps.map((step) => <li key={step}>{step}</li>)}
+              {feedback.nextSteps.map((step) => (
+                <li key={step}>{step}</li>
+              ))}
             </ul>
           ) : null}
         </section>
 
-        <section style={{ display: "grid", gridTemplateColumns: "360px minmax(0, 1fr) 380px", gap: 20, alignItems: "start" }}>
+        <section style={{ display: "grid", gridTemplateColumns: "380px 1fr", gap: 20, alignItems: "start" }}>
           <aside style={{ display: "grid", gap: 12 }}>
             <h2 style={{ margin: 0 }}>Cola de decisión</h2>
             {demands.length === 0 ? (
-              <div style={{ padding: 20, borderRadius: 18, background: "white", border: "1px solid #eaecf0" }}>No hay demandas cargadas.</div>
+              <div style={panelStyle()}>No hay demandas cargadas.</div>
             ) : (
               demands.map((demand) => {
-                const latest = latestTimelineItem(demand);
-                const active = selectedDemandId === demand.demand_id;
+                const selected = selectedDemandId === demand.demand_id;
+                const tone = toneColors(decisionTone(asText(demand.committee_inputs?.committee_final_decision, demand.status)));
                 return (
                   <button
                     key={demand.demand_id}
@@ -447,18 +533,17 @@ export default function CommitteeDecisionPage() {
                       textAlign: "left",
                       padding: 16,
                       borderRadius: 18,
-                      background: active ? "#111827" : "white",
-                      color: active ? "white" : "#101828",
-                      border: "1px solid #eaecf0",
+                      background: selected ? "#111827" : "white",
+                      color: selected ? "white" : "#101828",
+                      border: `1px solid ${selected ? "#111827" : "#eaecf0"}`,
                       cursor: "pointer"
                     }}
                   >
-                    <strong style={{ display: "block", marginBottom: 6 }}>{compact(demand.request.title, 70)}</strong>
+                    <strong style={{ display: "block", marginBottom: 6 }}>{demand.request.title}</strong>
                     <small>{demand.demand_id}</small>
-                    <div style={{ marginTop: 10, display: "grid", gap: 4 }}>
-                      <span style={{ color: active ? "#d0d5dd" : toneColors(decisionTone(demand.status)).text, fontWeight: 800 }}>{labelize(demand.status)}</span>
-                      <span>{hasDecision(demand) ? "Decisión registrada" : "Pendiente"}</span>
-                      {latest ? <small>Último evento: {formatDate(latest.timestamp)}</small> : null}
+                    <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                      <span style={{ color: selected ? "#d0d5dd" : tone.text, fontWeight: 800 }}>{labelize(demand.status)}</span>
+                      <span>· {hasDecision(demand) ? "evidencia lista" : "pendiente"}</span>
                     </div>
                   </button>
                 );
@@ -467,10 +552,10 @@ export default function CommitteeDecisionPage() {
           </aside>
 
           <section style={{ display: "grid", gap: 18 }}>
-            <article style={{ padding: 24, borderRadius: 24, background: "white", border: "1px solid #eaecf0" }}>
+            <article style={panelStyle()}>
               <h2 style={{ marginTop: 0 }}>Decisión del comité</h2>
               {!selectedDemand ? (
-                <p>Selecciona una demanda para registrar o revisar decisión.</p>
+                <p>Selecciona una demanda para registrar decisión.</p>
               ) : (
                 <div style={{ display: "grid", gap: 18 }}>
                   <div>
@@ -485,23 +570,14 @@ export default function CommitteeDecisionPage() {
                     </div>
                   </div>
 
-                  <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-                    {historySummary.map((item) => (
-                      <div key={item.label} style={{ padding: 14, borderRadius: 16, background: "#f9fafb", border: "1px solid #eaecf0" }}>
-                        <small style={{ color: "#667085", fontWeight: 800 }}>{item.label}</small>
-                        <strong style={{ display: "block", marginTop: 4 }}>{item.value}</strong>
-                      </div>
-                    ))}
-                  </section>
-
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
                     <label style={{ display: "grid", gap: 6, fontWeight: 700 }}>
-                      Recomendación del agente / intake
-                      <input value={labelize(suggestedDecision(selectedDemand))} readOnly style={{ padding: 12, borderRadius: 12, border: "1px solid #d0d5dd", background: "#f9fafb" }} />
+                      Recomendación previa
+                      <input value={labelize(suggestedDecision(selectedDemand))} readOnly style={{ ...fieldStyle(), background: "#f9fafb" }} />
                     </label>
                     <label style={{ display: "grid", gap: 6, fontWeight: 700 }}>
                       Riesgo percibido
-                      <select value={riskLevel} onChange={(event) => setRiskLevel(event.target.value)} style={{ padding: 12, borderRadius: 12, border: "1px solid #d0d5dd" }}>
+                      <select value={riskLevel} onChange={(event) => setRiskLevel(event.target.value)} style={fieldStyle()}>
                         <option value="low">Bajo</option>
                         <option value="medium">Medio</option>
                         <option value="high">Alto</option>
@@ -519,91 +595,109 @@ export default function CommitteeDecisionPage() {
                           <span>
                             <strong>{option.label}</strong>
                             <small style={{ display: "block", color: "#667085", marginTop: 4 }}>{option.helper}</small>
-                            <small style={{ display: "block", color: colors.text, fontWeight: 800, marginTop: 6 }}>{option.outcome}</small>
+                            <small style={{ display: "block", color: colors.text, marginTop: 4, fontWeight: 800 }}>{option.outcome}</small>
                           </span>
                         </label>
                       );
                     })}
                   </div>
 
+                  <section style={{ padding: 16, borderRadius: 18, background: selectedTone.bg, border: `1px solid ${selectedTone.border}`, color: selectedTone.text }}>
+                    <strong>Vista previa del resultado</strong>
+                    <p style={{ margin: "6px 0 0" }}>{selectedOption.outcome}. El paquete de evidencia incluirá motivo, condiciones, actor, roles y timeline.</p>
+                  </section>
+
                   <label style={{ display: "grid", gap: 6, fontWeight: 700 }}>
                     Justificación de decisión
-                    <textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={4} style={{ padding: 12, borderRadius: 12, border: "1px solid #d0d5dd", resize: "vertical" }} />
-                    <small style={{ color: reason.trim().length >= 10 ? "#067647" : "#b54708" }}>{reason.trim().length >= 10 ? "Justificación suficiente para trazabilidad." : "Agrega al menos 10 caracteres."}</small>
+                    <textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={4} style={fieldStyle()} />
+                    <small style={{ color: reason.trim().length >= 10 ? "#067647" : "#b54708" }}>{reason.trim().length >= 10 ? "Justificación suficiente." : "Agrega al menos 10 caracteres para dejar trazabilidad."}</small>
                   </label>
 
                   <label style={{ display: "grid", gap: 6, fontWeight: 700 }}>
                     Condiciones / próximos pasos
-                    <textarea value={conditions} onChange={(event) => setConditions(event.target.value)} rows={3} style={{ padding: 12, borderRadius: 12, border: "1px solid #d0d5dd", resize: "vertical" }} />
+                    <textarea value={conditions} onChange={(event) => setConditions(event.target.value)} rows={3} style={fieldStyle()} />
                   </label>
 
-                  <article style={{ padding: 16, borderRadius: 18, background: toneColors(selectedOption.tone).bg, border: `1px solid ${toneColors(selectedOption.tone).border}` }}>
-                    <strong style={{ color: toneColors(selectedOption.tone).text }}>Vista previa del resultado</strong>
-                    <p style={{ margin: "8px 0 0" }}>{selectedOption.outcome}. Se registrará con riesgo {labelize(riskLevel)}, recomendación previa {labelize(suggestedDecision(selectedDemand))} y justificación auditada.</p>
-                  </article>
-
-                  <button onClick={() => void submitDecision()} disabled={!decisionReady} style={{ padding: "14px 18px", borderRadius: 16, border: "none", background: decisionReady ? "#991b1b" : "#d0d5dd", color: "white", fontWeight: 900, cursor: decisionReady ? "pointer" : "not-allowed" }}>
-                    {saving ? "Registrando decisión..." : "Registrar decisión del comité"}
+                  <button onClick={() => void submitDecision()} disabled={!canSubmit} style={{ padding: "14px 18px", borderRadius: 999, border: "1px solid #991b1b", background: canSubmit ? "#991b1b" : "#d0d5dd", color: "white", fontWeight: 800, cursor: canSubmit ? "pointer" : "not-allowed" }}>
+                    {saving ? "Registrando decisión..." : "Registrar decisión y actualizar evidencia"}
                   </button>
                 </div>
               )}
             </article>
-          </section>
 
-          <aside style={{ display: "grid", gap: 16 }}>
-            <article style={{ padding: 20, borderRadius: 22, background: "white", border: "1px solid #eaecf0" }}>
-              <h2 style={{ marginTop: 0 }}>Historial enriquecido</h2>
-              {!selectedDemand ? (
-                <p style={{ color: "#667085" }}>Selecciona una demanda para ver historial.</p>
-              ) : (
-                <div style={{ display: "grid", gap: 10 }}>
-                  <div style={{ padding: 14, borderRadius: 16, background: "#f9fafb", border: "1px solid #eaecf0" }}>
-                    <small style={{ color: "#667085", fontWeight: 800 }}>Motivo final registrado</small>
-                    <p style={{ margin: "6px 0 0" }}>{asText(selectedDemand.committee_inputs?.committee_reason, "Pendiente de decisión formal.")}</p>
+            {selectedDemand ? (
+              <article style={panelStyle()}>
+                <h2 style={{ marginTop: 0 }}>Historial de decisión</h2>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
+                  <div style={{ padding: 14, borderRadius: 16, background: "#f9fafb" }}>
+                    <small>Decisión final</small>
+                    <strong style={{ display: "block", marginTop: 6 }}>{labelize(finalDecisionRecorded || "pendiente")}</strong>
                   </div>
-                  <div style={{ padding: 14, borderRadius: 16, background: "#f9fafb", border: "1px solid #eaecf0" }}>
-                    <small style={{ color: "#667085", fontWeight: 800 }}>Condiciones</small>
-                    <p style={{ margin: "6px 0 0" }}>{asText(selectedDemand.committee_inputs?.committee_conditions, "Sin condiciones registradas aún.")}</p>
+                  <div style={{ padding: 14, borderRadius: 16, background: "#f9fafb" }}>
+                    <small>Actor</small>
+                    <strong style={{ display: "block", marginTop: 6 }}>{asText(currentCommittee.committee_decision_recorded_by, "No registrado")}</strong>
                   </div>
-                  <div style={{ padding: 14, borderRadius: 16, background: "#f9fafb", border: "1px solid #eaecf0" }}>
-                    <small style={{ color: "#667085", fontWeight: 800 }}>Riesgo de comité</small>
-                    <strong style={{ display: "block", marginTop: 6 }}>{labelize(asText(selectedDemand.committee_inputs?.committee_risk_level, "Pendiente"))}</strong>
+                  <div style={{ padding: 14, borderRadius: 16, background: "#f9fafb" }}>
+                    <small>Fecha</small>
+                    <strong style={{ display: "block", marginTop: 6 }}>{formatDate(asText(currentCommittee.committee_decision_recorded_at, selectedDemand.updated_at))}</strong>
                   </div>
                 </div>
-              )}
-            </article>
 
-            <article style={{ padding: 20, borderRadius: 22, background: "white", border: "1px solid #eaecf0" }}>
-              <h2 style={{ marginTop: 0 }}>Timeline</h2>
-              {timelineItems.length === 0 ? (
-                <p style={{ color: "#667085" }}>No hay eventos para mostrar.</p>
-              ) : (
-                <ol style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 12 }}>
-                  {timelineItems.map((item) => {
+                <div style={{ marginTop: 16, display: "grid", gap: 10 }}>
+                  <strong>Motivo final</strong>
+                  <p style={{ margin: 0, color: "#475467" }}>{asText(currentCommittee.committee_reason, "Aún no se registra motivo formal del comité.")}</p>
+                  <strong>Condiciones</strong>
+                  <p style={{ margin: 0, color: "#475467" }}>{asText(currentCommittee.committee_conditions, "Aún no se registran condiciones.")}</p>
+                </div>
+              </article>
+            ) : null}
+
+            {selectedDemand ? (
+              <article style={panelStyle()}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+                  <div>
+                    <h2 style={{ margin: 0 }}>Paquete de evidencia</h2>
+                    <p style={{ margin: "6px 0 0", color: "#667085" }}>Resumen Markdown listo para comité, sponsor o auditoría.</p>
+                  </div>
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    <button onClick={() => void copyEvidencePacket()} style={{ padding: "10px 14px", borderRadius: 999, border: "1px solid #111827", background: "#111827", color: "white", fontWeight: 800 }}>
+                      {packetCopied ? "Copiado" : "Copiar paquete"}
+                    </button>
+                    <button onClick={downloadEvidencePacket} style={{ padding: "10px 14px", borderRadius: 999, border: "1px solid #991b1b", background: "white", color: "#991b1b", fontWeight: 800 }}>
+                      Descargar Markdown
+                    </button>
+                  </div>
+                </div>
+                <textarea value={evidencePacket} readOnly rows={18} style={{ marginTop: 16, width: "100%", boxSizing: "border-box", padding: 16, borderRadius: 16, border: "1px solid #d0d5dd", background: "#0f172a", color: "#e2e8f0", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 12, lineHeight: 1.5 }} />
+              </article>
+            ) : null}
+
+            {selectedDemand ? (
+              <article style={panelStyle()}>
+                <h2 style={{ marginTop: 0 }}>Timeline de evidencia</h2>
+                <div style={{ display: "grid", gap: 12 }}>
+                  {selectedTimeline.map((item) => {
                     const colors = toneColors(item.tone);
                     return (
-                      <li key={item.id} style={{ display: "grid", gridTemplateColumns: "18px 1fr", gap: 10 }}>
-                        <span style={{ width: 14, height: 14, marginTop: 5, borderRadius: 99, background: colors.text, boxShadow: `0 0 0 4px ${colors.soft}` }} />
-                        <div style={{ paddingBottom: 12, borderBottom: "1px solid #eaecf0" }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-                            <strong>{item.title}</strong>
-                            <small style={{ color: "#667085" }}>{formatDate(item.timestamp)}</small>
-                          </div>
-                          <p style={{ margin: "6px 0", color: "#475467" }}>{item.detail}</p>
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, fontSize: 12 }}>
-                            <span style={{ padding: "4px 8px", borderRadius: 99, background: colors.bg, color: colors.text, fontWeight: 800 }}>{item.source}</span>
-                            <span>Actor: {item.actor}</span>
-                            {item.decision ? <span>Decisión: {labelize(item.decision)}</span> : null}
-                            {item.fromStatus || item.toStatus ? <span>{labelize(item.fromStatus)} → {labelize(item.toStatus)}</span> : null}
-                          </div>
+                      <div key={item.id} style={{ display: "grid", gridTemplateColumns: "150px 1fr", gap: 14, padding: 14, borderRadius: 18, border: `1px solid ${colors.border}`, background: colors.bg }}>
+                        <div>
+                          <strong style={{ color: colors.text }}>{formatDate(item.timestamp)}</strong>
+                          <small style={{ display: "block", marginTop: 4, color: "#667085" }}>{item.source}</small>
                         </div>
-                      </li>
+                        <div>
+                          <strong>{item.title}</strong>
+                          <p style={{ margin: "6px 0", color: "#475467" }}>{compact(item.detail, 220)}</p>
+                          <small>
+                            Actor: {item.actor} · Estado: {labelize(item.fromStatus)} → {labelize(item.toStatus)} · Decisión: {labelize(item.decision)}
+                          </small>
+                        </div>
+                      </div>
                     );
                   })}
-                </ol>
-              )}
-            </article>
-          </aside>
+                </div>
+              </article>
+            ) : null}
+          </section>
         </section>
       </section>
     </main>
