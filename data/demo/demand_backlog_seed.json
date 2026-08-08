@@ -1,0 +1,265 @@
+[
+  {
+    "demand_id": "DEM-DEMO-001",
+    "created_at": "2026-08-08T05:00:00+00:00",
+    "updated_at": "2026-08-08T05:20:00+00:00",
+    "status": "scored",
+    "decision": "priority_alta",
+    "current_stage": "portfolio_scoring",
+    "request": {
+      "title": "Optimización de cobertura comercial con datos de ventas y clientes",
+      "description": "Integrar ventas, clientes y cobertura territorial para priorizar oportunidades comerciales, mejorar rutas y habilitar un dashboard ejecutivo de seguimiento semanal.",
+      "requester_area": "Comercial",
+      "requester_role": "Data Owner",
+      "domain_hint": "Ventas",
+      "target_consumption": "BI ejecutivo / dashboard"
+    },
+    "classification": {
+      "initiative_type": "bi_reporting",
+      "confidence": 0.86,
+      "rationale": "La demanda combina tableros ejecutivos, métricas comerciales y consumo BI.",
+      "signals": ["dashboard", "ventas", "clientes", "cobertura"],
+      "secondary_types": ["data_engineering", "data_governance"]
+    },
+    "architecture": {
+      "architecture_pattern": "bi_reporting",
+      "is_compliant": true,
+      "detected_components": ["sources", "extraction", "bronze", "silver", "gold", "semantic_model", "serving", "finops"],
+      "required_components": ["sources", "extraction", "bronze", "silver", "gold", "semantic_model", "serving", "finops"],
+      "missing_components": [],
+      "architecture_gaps": [],
+      "human_architecture_review_required": false,
+      "recommended_next_action": "approved_for_scoring"
+    },
+    "policy_gaps": [],
+    "architecture_gaps": [],
+    "finops_gaps": [],
+    "committee": {
+      "committee_stage": "portfolio_scoring",
+      "data_architect_final_validation_required": false,
+      "suggested_decision": "approved_for_scoring",
+      "rejection_allowed": true,
+      "rationale": "La solicitud cuenta con inputs suficientes para scoring y priorización.",
+      "required_review_roles": ["Data Owner", "Data Steward", "Data Architect"]
+    },
+    "committee_summary": "Caso listo para demostrar priorización con score alto, VAN positivo y trazabilidad completa.",
+    "agent_trace": [
+      "Intake Conversation Agent",
+      "Requirement Structuring Agent",
+      "Initiative Classification Agent",
+      "Policy Retrieval Agent",
+      "Architecture Compliance Agent",
+      "FinOps Readiness Agent",
+      "Operative Committee Routing Agent"
+    ],
+    "business_inputs": {
+      "operational_impact": 4,
+      "operational_justification": "Mejora procesos críticos de cobertura, rutas y seguimiento comercial.",
+      "strategic_impact": 4,
+      "strategic_impact_justification": "Alineado a crecimiento, cobertura y experiencia del cliente.",
+      "strategic_alignment": 5,
+      "strategic_alignment_justification": "Habilita prioridad estratégica comercial y gobierno de indicadores.",
+      "roi_percent": 80,
+      "van_usd": 25500,
+      "tir_percent": 67,
+      "payback_years": 1.5
+    },
+    "committee_inputs": {
+      "data_readiness": 4,
+      "data_readiness_justification": "Datos disponibles, trazables y con calidad razonable.",
+      "technical_feasibility": 4,
+      "technical_feasibility_justification": "Arquitectura y fuentes razonablemente definidas.",
+      "execution_effort": 4,
+      "execution_effort_justification": "Ejecución factible en 4 a 6 semanas.",
+      "risk_control": 4,
+      "risk_control_justification": "Riesgo bajo con controles y responsables claros.",
+      "reuse_potential": 5,
+      "reuse_potential_justification": "Componente base reutilizable para múltiples dominios comerciales."
+    },
+    "scoring": {
+      "score": 4.25,
+      "priority": "Alta",
+      "rationale": "Prioridad Alta por score ponderado 4.25. La decisión final debe ser tomada por comité humano.",
+      "components": {
+        "strategic_alignment": 1.0,
+        "business_value": 1.0,
+        "urgency": 0.6,
+        "data_readiness": 0.6,
+        "governance_risk": 0.2,
+        "technical_feasibility": 0.6
+      },
+      "financial_signal": "positive",
+      "model_version": "scoring-financial-v1",
+      "governance_note": "Financial metrics are calculated only from explicit committee assumptions."
+    },
+    "financials": {
+      "roi": 0.8,
+      "van_usd": 25500,
+      "tir": 0.67,
+      "payback_months": 18,
+      "cashflows": [],
+      "assumptions": {
+        "source": "direct_data_owner_metrics"
+      }
+    },
+    "validation_state": "committee_validated",
+    "events": [
+      {
+        "event_id": "EVT-DEMO001",
+        "timestamp": "2026-08-08T05:00:00+00:00",
+        "type": "demand_created",
+        "actor": "ATLAS DataGob",
+        "from_status": null,
+        "to_status": "operative_committee_review",
+        "decision": "approved_for_scoring",
+        "comment": "Solicitud demo registrada desde dataset semilla."
+      },
+      {
+        "event_id": "EVT-DEMO002",
+        "timestamp": "2026-08-08T05:20:00+00:00",
+        "type": "scoring_updated",
+        "actor": "Comité Operativo",
+        "from_status": "operative_committee_review",
+        "to_status": "scored",
+        "decision": "priority_alta",
+        "comment": "Score demo calculado con inputs del Data Owner validados por comité."
+      }
+    ]
+  },
+  {
+    "demand_id": "DEM-DEMO-002",
+    "created_at": "2026-08-08T05:05:00+00:00",
+    "updated_at": "2026-08-08T05:05:00+00:00",
+    "status": "operative_committee_review",
+    "decision": "architecture_exception_or_reformulation",
+    "current_stage": "operative_committee_architect_review",
+    "request": {
+      "title": "Calidad de datos de clientes para segmentación avanzada",
+      "description": "Validar calidad, completitud y consistencia de datos de clientes para segmentación, campañas y modelos analíticos de personalización.",
+      "requester_area": "Marketing",
+      "requester_role": "Data Owner",
+      "domain_hint": "Clientes",
+      "target_consumption": "Machine Learning"
+    },
+    "classification": {
+      "initiative_type": "machine_learning",
+      "confidence": 0.78,
+      "rationale": "La solicitud requiere preparación de datos para segmentación avanzada y analítica predictiva.",
+      "signals": ["clientes", "segmentación", "calidad", "modelos"],
+      "secondary_types": ["data_governance", "data_engineering"]
+    },
+    "architecture": {
+      "architecture_pattern": "machine_learning",
+      "is_compliant": false,
+      "detected_components": ["sources", "bronze", "silver", "gold", "quality", "serving"],
+      "required_components": ["sources", "extraction", "bronze", "silver", "gold", "feature_layer", "model_registry", "serving", "model_monitoring", "finops"],
+      "missing_components": ["extraction", "feature_layer", "model_registry", "model_monitoring", "finops"],
+      "architecture_gaps": ["Faltan feature_layer, model_registry, model_monitoring y FinOps."],
+      "human_architecture_review_required": true,
+      "recommended_next_action": "architect_review"
+    },
+    "policy_gaps": [
+      "Asignar Data Steward y reglas de calidad antes de scoring.",
+      "Definir uso permitido de datos personales y controles de privacidad."
+    ],
+    "architecture_gaps": ["Faltan componentes obligatorios del patrón ML: feature_layer, model_registry, model_monitoring."],
+    "finops_gaps": ["Definir presupuesto, owner de costo y frecuencia de entrenamiento/consulta."],
+    "committee": {
+      "committee_stage": "operative_committee_architect_review",
+      "data_architect_final_validation_required": true,
+      "suggested_decision": "architecture_exception_or_reformulation",
+      "rejection_allowed": true,
+      "rationale": "Requiere validación del Arquitecto de Datos y completar checklist técnico/gobierno.",
+      "required_review_roles": ["Data Architect", "Data Owner", "Data Steward"]
+    },
+    "committee_summary": "Caso ideal para demostrar edición del comité, completar checklist técnico y recalcular score.",
+    "agent_trace": ["Intake Conversation Agent", "Policy Retrieval Agent", "Architecture Compliance Agent"],
+    "business_inputs": {
+      "operational_impact": 3,
+      "operational_justification": "Mejora decisiones relevantes sobre campañas y segmentación.",
+      "strategic_impact": 4,
+      "strategic_impact_justification": "Contribuye a experiencia cliente y crecimiento comercial.",
+      "strategic_alignment": 4,
+      "strategic_alignment_justification": "Alineamiento alto con objetivos de personalización.",
+      "roi_percent": 38,
+      "van_usd": 28000,
+      "tir_percent": 19,
+      "payback_years": 2.5
+    },
+    "committee_inputs": {},
+    "validation_state": "pending_committee_validation",
+    "events": [
+      {
+        "event_id": "EVT-DEMO003",
+        "timestamp": "2026-08-08T05:05:00+00:00",
+        "type": "demand_created",
+        "actor": "ATLAS DataGob",
+        "from_status": null,
+        "to_status": "operative_committee_review",
+        "decision": "architecture_exception_or_reformulation",
+        "comment": "Solicitud demo pendiente de revisión del Comité Operativo."
+      }
+    ]
+  },
+  {
+    "demand_id": "DEM-DEMO-003",
+    "created_at": "2026-08-08T05:10:00+00:00",
+    "updated_at": "2026-08-08T05:10:00+00:00",
+    "status": "reformulation_required",
+    "decision": "reformulation_required",
+    "current_stage": "business_reformulation",
+    "request": {
+      "title": "Reporte exploratorio de inventario sin definición de fuentes",
+      "description": "Se requiere un reporte de inventario, pero aún no se conocen fuentes oficiales, responsables, frecuencia ni reglas de calidad.",
+      "requester_area": "Operaciones",
+      "requester_role": "Usuario de negocio",
+      "domain_hint": "Logística",
+      "target_consumption": "BI operativo"
+    },
+    "classification": {
+      "initiative_type": "bi_reporting",
+      "confidence": 0.61,
+      "rationale": "La solicitud expresa necesidad de reporte, pero carece de definición de fuentes y reglas.",
+      "signals": ["reporte", "inventario"],
+      "secondary_types": ["data_governance"]
+    },
+    "architecture": {
+      "architecture_pattern": "bi_reporting",
+      "is_compliant": false,
+      "detected_components": ["serving"],
+      "required_components": ["sources", "extraction", "bronze", "silver", "gold", "semantic_model", "serving", "finops"],
+      "missing_components": ["sources", "extraction", "bronze", "silver", "gold", "semantic_model", "finops"],
+      "architecture_gaps": ["No se identifican fuentes, capas medallion, modelo semántico ni FinOps."],
+      "human_architecture_review_required": true,
+      "recommended_next_action": "reformulation_required"
+    },
+    "policy_gaps": ["Definir Data Owner, fuentes oficiales y criterio de éxito del caso."],
+    "architecture_gaps": ["Faltan componentes mínimos para patrón BI."],
+    "finops_gaps": ["No existe estimación de consumo ni owner de costo."],
+    "committee": {
+      "committee_stage": "business_reformulation",
+      "data_architect_final_validation_required": true,
+      "suggested_decision": "reformulation_required",
+      "rejection_allowed": true,
+      "rationale": "Debe volver a negocio para completar definición mínima antes de scoring.",
+      "required_review_roles": ["Data Owner", "Data Steward"]
+    },
+    "committee_summary": "Caso demo para mostrar reformulación y cierre lógico trazable.",
+    "agent_trace": ["Intake Conversation Agent", "Requirement Structuring Agent", "Operative Committee Routing Agent"],
+    "business_inputs": {},
+    "committee_inputs": {},
+    "validation_state": "needs_business_input",
+    "events": [
+      {
+        "event_id": "EVT-DEMO004",
+        "timestamp": "2026-08-08T05:10:00+00:00",
+        "type": "demand_created",
+        "actor": "ATLAS DataGob",
+        "from_status": null,
+        "to_status": "reformulation_required",
+        "decision": "reformulation_required",
+        "comment": "Solicitud demo enviada a reformulación por falta de información mínima."
+      }
+    ]
+  }
+]
