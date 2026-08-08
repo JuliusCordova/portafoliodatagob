@@ -1,10 +1,9 @@
 """Local demand backlog persistence for ATLAS DataGob.
 
 This module intentionally uses a lightweight JSON store for the MVP. It keeps
-requests, validation outputs, committee decisions, scoring results, financial
-metrics and lifecycle events in one place so the product can demonstrate
-traceability before moving to a managed store such as Firestore, AlloyDB, Cloud
-SQL or BigQuery.
+requests, validation outputs, committee decisions and lifecycle events in one
+place so the product can demonstrate traceability before moving to a managed
+store such as Firestore, AlloyDB, Cloud SQL or BigQuery.
 """
 from __future__ import annotations
 
@@ -23,6 +22,7 @@ VALID_DEMAND_STATUSES = {
     "approved_for_scoring",
     "scored",
     "rejected",
+    "archived",
     "mvp_candidate",
     "production_candidate",
 }
@@ -32,6 +32,28 @@ def utc_now() -> str:
     """Return an ISO timestamp suitable for audit events."""
 
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+def _event(
+    *,
+    event_type: str,
+    actor: str,
+    from_status: str | None,
+    to_status: str,
+    decision: str | None,
+    comment: str,
+    timestamp: str,
+) -> dict:
+    return {
+        "event_id": f"EVT-{uuid4().hex[:8].upper()}",
+        "timestamp": timestamp,
+        "type": event_type,
+        "actor": actor,
+        "from_status": from_status,
+        "to_status": to_status,
+        "decision": decision,
+        "comment": comment,
+    }
 
 
 def load_demand_records(path: str | Path = DEFAULT_BACKLOG_PATH) -> list[dict]:
@@ -81,28 +103,6 @@ def demand_id_for(now: str) -> str:
     return f"DEM-{date_token}-{uuid4().hex[:8].upper()}"
 
 
-def _event(
-    *,
-    event_type: str,
-    actor: str,
-    from_status: str | None,
-    to_status: str,
-    decision: str | None,
-    comment: str,
-    timestamp: str,
-) -> dict:
-    return {
-        "event_id": f"EVT-{uuid4().hex[:8].upper()}",
-        "timestamp": timestamp,
-        "type": event_type,
-        "actor": actor,
-        "from_status": from_status,
-        "to_status": to_status,
-        "decision": decision,
-        "comment": comment,
-    }
-
-
 def create_demand_record(
     validation_result: dict,
     *,
@@ -134,8 +134,6 @@ def create_demand_record(
         "committee": committee,
         "committee_summary": validation_result.get("committee_summary", ""),
         "agent_trace": validation_result.get("agent_trace", []),
-        "scoring": None,
-        "financials": None,
         "events": [
             _event(
                 event_type="demand_created",
@@ -238,6 +236,10 @@ def update_demand_record_scoring(
             "governance_note": scoring_result["governance_note"],
         }
         record["financials"] = scoring_result["financials"]
+        if "business_inputs" in scoring_result:
+            record["business_inputs"] = scoring_result["business_inputs"]
+        if "committee_inputs" in scoring_result:
+            record["committee_inputs"] = scoring_result["committee_inputs"]
         record["status"] = "scored"
         record["decision"] = f"priority_{str(scoring_result['priority']).lower()}"
         record["current_stage"] = "portfolio_scoring"
