@@ -31,8 +31,8 @@ TERMINAL_DEMAND_STATUSES = {"rejected", "closed", "archived"}
 ALLOWED_DEMAND_TRANSITIONS: dict[str, set[str]] = {
     "draft": {"intake_validated", "operative_committee_review", "reformulation_required", "rejected", "closed"},
     "intake_validated": {"operative_committee_review", "reformulation_required", "approved_for_scoring", "rejected", "closed"},
-    "operative_committee_review": {"approved_for_scoring", "reformulation_required", "rejected", "closed"},
-    "reformulation_required": {"intake_validated", "operative_committee_review", "rejected", "closed"},
+    "operative_committee_review": {"approved_for_scoring", "scored", "reformulation_required", "rejected", "closed"},
+    "reformulation_required": {"intake_validated", "operative_committee_review", "approved_for_scoring", "rejected", "closed"},
     "approved_for_scoring": {"scored", "operative_committee_review", "rejected", "closed"},
     "scored": {"mvp_candidate", "production_candidate", "operative_committee_review", "closed", "archived"},
     "mvp_candidate": {"production_candidate", "scored", "closed", "archived"},
