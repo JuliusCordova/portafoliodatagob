@@ -13,6 +13,11 @@ from pathlib import Path
 from typing import Protocol
 
 from atlas_datagob.services.demand_lifecycle import normalize_and_validate_records
+from atlas_datagob.services.persistence_config import (
+    DEFAULT_REPOSITORY_ADAPTER,
+    demand_repository_adapter,
+    validate_persistence_configuration,
+)
 
 
 class DemandRepository(Protocol):
@@ -52,7 +57,10 @@ class LocalJsonDemandRepository:
             file.write("\n")
 
 
-def demand_repository_for(path: str | Path) -> DemandRepository:
+def demand_repository_for(path: str | Path, adapter: str | None = None) -> DemandRepository:
     """Return the repository adapter for the configured demand backlog path."""
 
+    selected_adapter = adapter or demand_repository_adapter()
+    if selected_adapter != DEFAULT_REPOSITORY_ADAPTER:
+        validate_persistence_configuration()
     return LocalJsonDemandRepository(path)
