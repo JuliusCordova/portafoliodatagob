@@ -26,6 +26,8 @@ type ValidationResult = {
   committee_summary: string;
 };
 
+type RuntimeMode = "demo" | "api" | "error";
+
 const defaultResult: ValidationResult = {
   classification: {
     initiative_type: "data_engineering",
@@ -104,6 +106,12 @@ function GapList({ title, items, tone }: { title: string; items: string[]; tone:
   );
 }
 
+function runtimeLabel(mode: RuntimeMode) {
+  if (mode === "api") return "API conectada";
+  if (mode === "error") return "Error conexión";
+  return "Demo local";
+}
+
 export default function HomePage() {
   const [title, setTitle] = useState("Validación de calidad de clientes para dashboard ejecutivo");
   const [description, setDescription] = useState(
@@ -111,7 +119,8 @@ export default function HomePage() {
   );
   const [targetConsumption, setTargetConsumption] = useState("BI ejecutivo / dashboard");
   const [result, setResult] = useState<ValidationResult>(defaultResult);
-  const [mode, setMode] = useState("demo");
+  const [mode, setMode] = useState<RuntimeMode>("demo");
+  const [connectionMessage, setConnectionMessage] = useState("Esperando validación del requerimiento.");
 
   const readinessScore = useMemo(() => {
     const gaps = result.policy_gaps.length + result.finops_gaps.length + result.architecture.architecture_gaps.length;
@@ -122,10 +131,12 @@ export default function HomePage() {
     const baseUrl = process.env.NEXT_PUBLIC_ATLAS_API_BASE;
     if (!baseUrl) {
       setMode("demo");
+      setConnectionMessage("Variable NEXT_PUBLIC_ATLAS_API_BASE no configurada. Usando modo demo local.");
       setResult(defaultResult);
       return;
     }
     try {
+      setConnectionMessage(`Validando contra ${baseUrl}...`);
       const response = await fetch(`${baseUrl}/intake/policy-architecture-validate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -138,12 +149,15 @@ export default function HomePage() {
           target_consumption: targetConsumption
         })
       });
-      if (!response.ok) throw new Error("API validation failed");
+      if (!response.ok) throw new Error(`API validation failed with HTTP ${response.status}`);
       const payload = (await response.json()) as ValidationResult;
       setMode("api");
+      setConnectionMessage(`Conectado correctamente a ${baseUrl}.`);
       setResult(payload);
-    } catch {
-      setMode("demo");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Error desconocido al conectar con el API.";
+      setMode("error");
+      setConnectionMessage(`No se pudo conectar con el API: ${message}`);
       setResult(defaultResult);
     }
   }
@@ -152,7 +166,7 @@ export default function HomePage() {
     <main className="shell">
       <section className="hero">
         <div>
-          <p className="eyebrow">ATLAS DataGob · Sprint 05</p>
+          <p className="eyebrow">ATLAS DataGob · Sprint 06.1</p>
           <h1>Intake multiagente con validación de políticas y arquitectura</h1>
           <p className="hero-copy">
             Captura el requerimiento, detecta brechas contra políticas, valida la arquitectura canónica Google Cloud y deriva al Comité Operativo con decisión final del Arquitecto de Datos.
@@ -160,8 +174,13 @@ export default function HomePage() {
         </div>
         <div className="hero-badge">
           <span>Modo</span>
-          <strong>{mode === "api" ? "API conectada" : "Demo local"}</strong>
+          <strong>{runtimeLabel(mode)}</strong>
         </div>
+      </section>
+
+      <section className={`status-card status-${mode}`}>
+        <strong>Estado de conexión</strong>
+        <span>{connectionMessage}</span>
       </section>
 
       <section className="metrics-grid">
