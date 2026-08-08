@@ -1,4 +1,4 @@
-.PHONY: test test-api lint-local validate-contracts smoke-policy seed-demo dev-api dev-web
+.PHONY: test test-api lint-local validate-contracts smoke-policy seed-demo dev-api dev-web docker-build docker-build-api docker-build-web
 
 test: test-api validate-contracts smoke-policy
 
@@ -22,3 +22,11 @@ dev-api:
 
 dev-web:
 	cd apps/web && NEXT_PUBLIC_ATLAS_API_BASE=http://localhost:8000 npm run dev
+
+docker-build: docker-build-api docker-build-web
+
+docker-build-api:
+	docker build -f apps/api/Dockerfile -t atlas-datagob-api:local .
+
+docker-build-web:
+	docker build -f apps/web/Dockerfile -t atlas-datagob-web:local apps/web
