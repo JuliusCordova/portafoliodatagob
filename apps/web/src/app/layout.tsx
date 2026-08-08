@@ -1,4 +1,5 @@
 import "./globals.css";
+import DemoControls from "./components/DemoControls";
 
 export const metadata = {
   title: "ATLAS DataGob · Intake",
@@ -8,7 +9,10 @@ export const metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es">
-      <body>{children}</body>
+      <body>
+        {children}
+        <DemoControls />
+      </body>
     </html>
   );
 }
