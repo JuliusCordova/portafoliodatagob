@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { atlasJsonProxyHeaders } from "../../_lib/identity";
 
 export async function PATCH(request: Request) {
   const backendBaseUrl = process.env.ATLAS_INTERNAL_API_BASE ?? "http://localhost:8000";
@@ -19,7 +20,7 @@ export async function PATCH(request: Request) {
 
     const response = await fetch(`${backendBaseUrl}/demands/${demandId}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: atlasJsonProxyHeaders(request),
       body: JSON.stringify(updatePayload),
       cache: "no-store"
     });
