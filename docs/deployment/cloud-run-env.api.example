@@ -1,0 +1,9 @@
+# ATLAS DataGob API · Cloud Run environment example
+# Use local_json for local/demo filesystem persistence.
+# Use firestore for managed persistence on Cloud Run.
+
+ATLAS_DEMAND_REPOSITORY=firestore
+ATLAS_FIRESTORE_PROJECT=<gcp-project-id>
+ATLAS_FIRESTORE_DATABASE=(default)
+ATLAS_FIRESTORE_COLLECTION=atlas_datagob_demands
+ATLAS_DEMO_SEED_PATH=data/demo/demand_backlog_seed.json
