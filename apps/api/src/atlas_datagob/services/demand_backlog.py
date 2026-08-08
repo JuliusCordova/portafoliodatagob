@@ -13,6 +13,7 @@ from pathlib import Path
 from uuid import uuid4
 
 DEFAULT_BACKLOG_PATH = Path("data/runtime/demand_backlog.json")
+DEMO_SEED_PATH = Path("data/demo/demand_backlog_seed.json")
 
 VALID_DEMAND_STATUSES = {
     "draft",
@@ -72,6 +73,12 @@ def _clean_mapping(payload: dict | None) -> dict:
     return {key: value for key, value in payload.items() if value is not None}
 
 
+def _clone_records(records: list[dict]) -> list[dict]:
+    """Deep-copy JSON-compatible records without retaining references."""
+
+    return json.loads(json.dumps(records))
+
+
 def load_demand_records(path: str | Path = DEFAULT_BACKLOG_PATH) -> list[dict]:
     """Load all demand records from the JSON backlog."""
 
@@ -93,6 +100,43 @@ def write_demand_records(records: list[dict], path: str | Path = DEFAULT_BACKLOG
     with backlog_path.open("w", encoding="utf-8") as file:
         json.dump(records, file, indent=2, ensure_ascii=False)
         file.write("\n")
+
+
+def load_demo_seed_records(seed_path: str | Path = DEMO_SEED_PATH) -> list[dict]:
+    """Load curated records used to reset and rehearse product demos."""
+
+    records = load_demand_records(seed_path)
+    if not records:
+        raise ValueError(f"Demo seed file has no records: {seed_path}")
+    return records
+
+
+def reset_demo_backlog(
+    *,
+    seed_path: str | Path = DEMO_SEED_PATH,
+    path: str | Path = DEFAULT_BACKLOG_PATH,
+    actor: str = "ATLAS DataGob",
+) -> list[dict]:
+    """Replace the runtime backlog with curated demo records and audit the reset."""
+
+    records = _clone_records(load_demo_seed_records(seed_path))
+    now = utc_now()
+    for record in records:
+        status = record.get("status", "intake_validated")
+        record["updated_at"] = now
+        record.setdefault("events", []).append(
+            _event(
+                event_type="demo_reset",
+                actor=actor,
+                from_status=status,
+                to_status=status,
+                decision=record.get("decision"),
+                comment="Registro cargado desde dataset semilla de demo.",
+                timestamp=now,
+            )
+        )
+    write_demand_records(records, path)
+    return records
 
 
 def infer_initial_status(validation_result: dict) -> str:
