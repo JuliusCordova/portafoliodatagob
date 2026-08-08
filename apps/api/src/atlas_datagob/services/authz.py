@@ -156,6 +156,13 @@ def validate_auth_configuration() -> None:
         raise AuthConfigurationError(f"Unsupported ATLAS_AUTH_MODE: {mode}. Supported modes: {supported}")
 
 
+def _public_context() -> AuthContext:
+    """Return an unauthenticated context for public routes."""
+
+    validate_auth_configuration()
+    return AuthContext(user="public", roles=(), mode=auth_mode(), authenticated=False)
+
+
 def _split_roles(raw_roles: str | None) -> tuple[str, ...]:
     roles = tuple(sorted({role.strip().lower() for role in (raw_roles or "").split(",") if role.strip()}))
     unknown = [role for role in roles if role not in SUPPORTED_ROLES]
@@ -207,13 +214,16 @@ def require_permission(context: AuthContext, permission: str) -> None:
 def permission_for_request(method: str, path: str) -> str | None:
     """Map API route patterns to required permissions.
 
-    Health, generated docs and OpenAPI remain public because platform probes and
-    API documentation should still work before an identity provider is wired.
+    Health, generated docs, preflight requests and OpenAPI remain public because
+    platform probes, browser CORS and API documentation should still work before
+    an identity provider is wired.
     """
 
     method = method.upper()
     path = path.rstrip("/") or "/"
 
+    if method == "OPTIONS":
+        return None
     if path in {"/health", "/openapi.json", "/docs", "/redoc"}:
         return None
     if path.startswith("/docs/") or path.startswith("/redoc/"):
@@ -254,10 +264,12 @@ def permission_for_request(method: str, path: str) -> str | None:
 def authorize_request(method: str, path: str, headers: Mapping[str, str] | None = None) -> AuthContext:
     """Authorize an HTTP request and return the resolved auth context."""
 
-    context = context_from_headers(headers)
     permission = permission_for_request(method, path)
-    if permission:
-        require_permission(context, permission)
+    if permission is None:
+        return _public_context()
+
+    context = context_from_headers(headers)
+    require_permission(context, permission)
     return context
 
 
