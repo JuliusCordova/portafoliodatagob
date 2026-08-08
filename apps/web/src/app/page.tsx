@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 
 type CommitteeRoute = {
   route?: string;
@@ -79,8 +79,11 @@ type BacklogResponse = {
 };
 
 type RuntimeMode = "demo" | "api" | "error" | "loading";
+type Experience = "intake" | "committee" | "dashboard";
 type PriorityLabel = "Alta" | "Media" | "Baja";
 type PillTone = "neutral" | "ok" | "warn" | "risk" | "dark";
+
+const benchmarkScore = 4.0;
 
 const defaultResult: ValidationResult = {
   classification: {
@@ -116,8 +119,6 @@ const defaultResult: ValidationResult = {
     "La solicitud fue estructurada por el intake multiagente. Presenta brechas de arquitectura, gobierno y FinOps que deben ser revisadas en Comité Operativo con validación final del Arquitecto de Datos."
 };
 
-const benchmarkScore = 4.0;
-
 function Pill({ children, tone = "neutral" }: { children: ReactNode; tone?: PillTone }) {
   return <span className={`pill pill-${tone}`}>{children}</span>;
 }
@@ -126,9 +127,9 @@ function labelize(value: string | undefined | null) {
   return value ? value.replaceAll("_", " ") : "No definido";
 }
 
-function compactLabel(value: string | undefined | null) {
+function compactLabel(value: string | undefined | null, maxLength = 62) {
   const label = labelize(value);
-  return label.length > 54 ? `${label.slice(0, 54)}…` : label;
+  return label.length > maxLength ? `${label.slice(0, maxLength)}…` : label;
 }
 
 function formatDate(value: string) {
@@ -152,10 +153,6 @@ function priorityTone(priority: PriorityLabel): PillTone {
   return "neutral";
 }
 
-function demandReviewers(demand: DemandRecord): string[] {
-  return demand.committee.required_reviewers ?? demand.committee.required_review_roles ?? [];
-}
-
 function demandGapCount(demand: DemandRecord) {
   return demand.policy_gaps.length + demand.architecture_gaps.length + demand.finops_gaps.length;
 }
@@ -176,17 +173,15 @@ function priorityFromDemand(demand: DemandRecord): PriorityLabel {
   return "Baja";
 }
 
-function gapTone(count: number): PillTone {
-  if (count >= 5) return "risk";
-  if (count >= 2) return "warn";
-  return "ok";
+function committeeReviewers(demand: DemandRecord): string[] {
+  return demand.committee.required_reviewers ?? demand.committee.required_review_roles ?? [];
 }
 
 function percentage(value: number, total: number) {
   return total === 0 ? 0 : Math.round((value / total) * 100);
 }
 
-function AvgScore({ score }: { score: number }) {
+function ScoreChip({ score }: { score: number }) {
   return (
     <span className="score-chip">
       {score.toFixed(2)}<small>/5</small>
@@ -204,6 +199,7 @@ function EmptyState({ title, copy }: { title: string; copy: string }) {
 }
 
 export default function HomePage() {
+  const [activeExperience, setActiveExperience] = useState<Experience>("intake");
   const [title, setTitle] = useState("Validación de calidad de clientes para dashboard ejecutivo");
   const [description, setDescription] = useState(
     "Necesitamos integrar datos de clientes desde fuentes operacionales, llevarlos a Bronze, Silver y Gold, crear controles de calidad y publicar un dashboard ejecutivo. Aún no se ha definido cuadratura, modelo semántico ni presupuesto."
@@ -213,9 +209,9 @@ export default function HomePage() {
   const [persistedDemand, setPersistedDemand] = useState<DemandRecord | null>(null);
   const [backlog, setBacklog] = useState<DemandRecord[]>([]);
   const [selectedDemandId, setSelectedDemandId] = useState<string | null>(null);
-  const [backlogMessage, setBacklogMessage] = useState("Backlog pendiente de sincronización.");
   const [mode, setMode] = useState<RuntimeMode>("demo");
-  const [connectionMessage, setConnectionMessage] = useState("Esperando validación del requerimiento.");
+  const [connectionMessage, setConnectionMessage] = useState("Listo para registrar una nueva solicitud.");
+  const [backlogMessage, setBacklogMessage] = useState("Backlog pendiente de sincronización.");
   const [backlogLoading, setBacklogLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -230,31 +226,26 @@ export default function HomePage() {
   }, [backlog]);
 
   const portfolioMetrics = useMemo(() => {
-    const total = backlog.length;
     const scores = backlog.map((item) => scoreFromReadiness(readinessFromDemand(item)));
-    const averageScore = scores.length ? scores.reduce((sum, score) => sum + score, 0) / scores.length : scoreFromReadiness(76);
+    const averageScore = scores.length ? scores.reduce((sum, score) => sum + score, 0) / scores.length : 0;
     const highPriority = backlog.filter((item) => priorityFromDemand(item) === "Alta").length;
     const mediumPriority = backlog.filter((item) => priorityFromDemand(item) === "Media").length;
     const lowPriority = backlog.filter((item) => priorityFromDemand(item) === "Baja").length;
     const inReview = backlog.filter((item) => item.status.includes("review")).length;
     const approved = backlog.filter((item) => item.status.includes("approved")).length;
-    const reformulation = backlog.filter((item) => item.status.includes("reformulation")).length;
-    const rejected = backlog.filter((item) => item.status.includes("rejected")).length;
     const events = backlog.reduce((sum, item) => sum + item.events.length, 0);
     const policyGaps = backlog.reduce((sum, item) => sum + item.policy_gaps.length, 0);
     const architectureGaps = backlog.reduce((sum, item) => sum + item.architecture_gaps.length, 0);
     const finopsGaps = backlog.reduce((sum, item) => sum + item.finops_gaps.length, 0);
 
     return {
-      total,
+      total: backlog.length,
       averageScore,
       highPriority,
       mediumPriority,
       lowPriority,
       inReview,
       approved,
-      reformulation,
-      rejected,
       events,
       policyGaps,
       architectureGaps,
@@ -266,6 +257,18 @@ export default function HomePage() {
     const gaps = result.policy_gaps.length + result.finops_gaps.length + result.architecture.architecture_gaps.length;
     return Math.max(25, 100 - gaps * 12);
   }, [result]);
+
+  const priorityDistribution = [
+    { label: "Alta", value: portfolioMetrics.highPriority, tone: "risk" as PillTone },
+    { label: "Media", value: portfolioMetrics.mediumPriority, tone: "warn" as PillTone },
+    { label: "Baja", value: portfolioMetrics.lowPriority, tone: "neutral" as PillTone }
+  ];
+
+  const gapDistribution = [
+    { label: "Política", value: portfolioMetrics.policyGaps },
+    { label: "Arquitectura", value: portfolioMetrics.architectureGaps },
+    { label: "FinOps", value: portfolioMetrics.finopsGaps }
+  ];
 
   async function loadBacklog(highlightDemandId?: string) {
     try {
@@ -300,7 +303,7 @@ export default function HomePage() {
   async function validateRequest() {
     try {
       setMode("loading");
-      setConnectionMessage("Validando y guardando solicitud en backlog por proxy interno Next.js → FastAPI localhost:8000...");
+      setConnectionMessage("Validando políticas, arquitectura y guardando la solicitud...");
       const response = await fetch("/api/intake/validate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -321,13 +324,14 @@ export default function HomePage() {
       setMode("api");
       setPersistedDemand(payload.demand);
       setSelectedDemandId(payload.demand.demand_id);
-      setConnectionMessage(`Solicitud ${payload.demand.demand_id} validada y guardada en backlog.`);
+      setConnectionMessage(`Solicitud ${payload.demand.demand_id} registrada y enviada a ${labelize(payload.demand.current_stage)}.`);
       setResult(payload.validation);
       await loadBacklog(payload.demand.demand_id);
+      setActiveExperience("committee");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Error desconocido al conectar con el API.";
       setMode("error");
-      setConnectionMessage(`No se pudo conectar con el API: ${message}`);
+      setConnectionMessage(`No se pudo registrar la solicitud: ${message}`);
       setResult(defaultResult);
       setPersistedDemand(null);
     }
@@ -366,381 +370,317 @@ export default function HomePage() {
     }
   }
 
-  const priorityDistribution = [
-    { label: "Alta", value: portfolioMetrics.highPriority, tone: "risk" as PillTone },
-    { label: "Media", value: portfolioMetrics.mediumPriority, tone: "warn" as PillTone },
-    { label: "Baja", value: portfolioMetrics.lowPriority, tone: "neutral" as PillTone }
-  ];
-
-  const gapDistribution = [
-    { label: "Política", value: portfolioMetrics.policyGaps },
-    { label: "Arquitectura", value: portfolioMetrics.architectureGaps },
-    { label: "FinOps", value: portfolioMetrics.finopsGaps }
-  ];
-
   return (
     <main className="executive-shell">
-      <section className="executive-hero">
+      <section className="product-hero">
         <div>
           <p className="eyebrow">ATLAS DataGob · Sprint 08</p>
-          <h1>Dashboard Ejecutivo de Priorización</h1>
+          <h1>Gobierno de demanda con experiencias separadas por rol</h1>
           <p className="hero-copy">
-            Vista de portafolio para gobernar demanda de datos: prioridad, decisión, brechas, ruta de comité y trazabilidad operativa en una sola pantalla.
+            Un flujo claro: negocio registra la solicitud, el Comité Operativo analiza y decide, y los comités ejecutivos revisan priorización, valor y trazabilidad del portafolio.
           </p>
         </div>
-        <div className="hero-stack">
-          <div className="hero-badge">
-            <span>Modo</span>
-            <strong>{mode === "loading" ? "Sincronizando" : mode === "api" ? "API conectada" : mode === "error" ? "Error conexión" : "Demo local"}</strong>
-          </div>
-          <button className="ghost-button" onClick={() => void loadBacklog()} disabled={backlogLoading}>
-            {backlogLoading ? "Actualizando…" : "Actualizar backlog"}
-          </button>
+        <div className="hero-badge">
+          <span>Modo</span>
+          <strong>{mode === "loading" ? "Sincronizando" : mode === "api" ? "API conectada" : mode === "error" ? "Error" : "Listo"}</strong>
         </div>
       </section>
 
+      <nav className="experience-nav" aria-label="Experiencias ATLAS DataGob">
+        <button className={activeExperience === "intake" ? "experience-tab active" : "experience-tab"} onClick={() => setActiveExperience("intake")}>
+          <span>01</span>
+          <strong>Intake negocio</strong>
+          <small>Formulario simple para usuarios de negocio</small>
+        </button>
+        <button className={activeExperience === "committee" ? "experience-tab active" : "experience-tab"} onClick={() => setActiveExperience("committee")}>
+          <span>02</span>
+          <strong>Comité operativo</strong>
+          <small>Cola, brechas, decisión y trazabilidad</small>
+        </button>
+        <button className={activeExperience === "dashboard" ? "experience-tab active" : "experience-tab"} onClick={() => setActiveExperience("dashboard")}>
+          <span>03</span>
+          <strong>Tablero ejecutivo</strong>
+          <small>Priorización para comités operativo y estratégico</small>
+        </button>
+      </nav>
+
       <section className={`status-card status-${mode}`}>
-        <strong>Estado de conexión</strong>
+        <strong>Estado del sistema</strong>
         <span>{connectionMessage}</span>
       </section>
+
       <section className="status-card status-api">
         <strong>Backlog persistente</strong>
         <span>{backlogLoading ? "Sincronizando backlog..." : backlogMessage}</span>
       </section>
 
-      <section className="kpi-ribbon">
-        <article className="kpi-card primary-kpi">
-          <span>▦ Score promedio</span>
-          <strong>{portfolioMetrics.averageScore.toFixed(2)}</strong>
-          <small>de 5.00 puntos máximo</small>
-        </article>
-        <article className="kpi-card">
-          <span>● Alta prioridad</span>
-          <strong>{portfolioMetrics.highPriority}</strong>
-          <small>casos prioritarios</small>
-        </article>
-        <article className="kpi-card">
-          <span>$ VAN total</span>
-          <strong className="pending-value">Sprint 09</strong>
-          <small>valor potencial por modelar</small>
-        </article>
-        <article className="kpi-card">
-          <span>▣ Solicitudes</span>
-          <strong>{portfolioMetrics.total}</strong>
-          <small>demanda registrada</small>
-        </article>
-        <article className="kpi-card">
-          <span>◐ En revisión</span>
-          <strong>{portfolioMetrics.inReview}</strong>
-          <small>comité / arquitectura</small>
-        </article>
-        <article className="kpi-card">
-          <span>↗ Eventos</span>
-          <strong>{portfolioMetrics.events}</strong>
-          <small>evidencia trazable</small>
-        </article>
-      </section>
-
-      <section className="dashboard-grid">
-        <article className="executive-card portfolio-card">
-          <div className="card-title-row">
-            <div>
-              <p className="eyebrow small">🏆 Top casos prioritarios</p>
-              <h2>Portafolio gobernado</h2>
-            </div>
-            <Pill tone="dark">Benchmark {benchmarkScore.toFixed(1)}</Pill>
-          </div>
-
-          {executiveCases.length ? (
-            <div className="portfolio-table-wrap">
-              <table className="portfolio-table">
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Área</th>
-                    <th>Caso de negocio</th>
-                    <th>Score</th>
-                    <th>Prioridad</th>
-                    <th>Estado</th>
-                    <th>Decisión</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {executiveCases.map((demand, index) => {
-                    const readiness = readinessFromDemand(demand);
-                    const score = scoreFromReadiness(readiness);
-                    const priority = priorityFromDemand(demand);
-                    return (
-                      <tr
-                        key={demand.demand_id}
-                        className={selectedDemand?.demand_id === demand.demand_id ? "selected-row" : ""}
-                        onClick={() => setSelectedDemandId(demand.demand_id)}
-                      >
-                        <td>{index + 1}</td>
-                        <td>{demand.request.requester_area}</td>
-                        <td>
-                          <strong>{demand.request.title}</strong>
-                          <small>{demand.demand_id}</small>
-                        </td>
-                        <td><AvgScore score={score} /></td>
-                        <td><Pill tone={priorityTone(priority)}>{priority}</Pill></td>
-                        <td><Pill tone={statusTone(demand.status)}>{compactLabel(demand.status)}</Pill></td>
-                        <td>{compactLabel(demand.decision)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <EmptyState title="Aún no hay solicitudes en backlog" copy="Crea una solicitud para que aparezca en el ranking ejecutivo." />
-          )}
-        </article>
-
-        <article className="executive-card priority-card">
-          <div className="card-title-row compact-title">
-            <div>
-              <p className="eyebrow small">▣ Distribución</p>
-              <h2>Prioridad</h2>
-            </div>
-          </div>
-          <div className="distribution-list">
-            {priorityDistribution.map((item) => {
-              const pct = percentage(item.value, portfolioMetrics.total);
-              return (
-                <div className="distribution-row" key={item.label}>
-                  <div>
-                    <Pill tone={item.tone}>{item.label}</Pill>
-                    <strong>{item.value}</strong>
-                  </div>
-                  <div className="bar-track"><span style={{ width: `${pct}%` }} /></div>
-                  <small>{pct}% del backlog</small>
-                </div>
-              );
-            })}
-          </div>
-        </article>
-
-        <article className="executive-card finance-card">
-          <div className="card-title-row compact-title">
-            <div>
-              <p className="eyebrow small">💼 Finanzas</p>
-              <h2>Métricas clave</h2>
-            </div>
-          </div>
-          <div className="finance-list">
-            <div><span>VAN total</span><strong>Pendiente</strong></div>
-            <div><span>TIR máxima</span><strong>Pendiente</strong></div>
-            <div><span>Payback prom.</span><strong>Pendiente</strong></div>
-            <div><span>ROI promedio</span><strong>Pendiente</strong></div>
-          </div>
-          <p className="note">El tablero deja preparada la zona financiera; el modelo de VAN, TIR, ROI y payback se agregará en el Sprint 09.</p>
-        </article>
-      </section>
-
-      <section className="analytics-grid">
-        <article className="executive-card comparison-card">
-          <div className="card-title-row">
-            <div>
-              <p className="eyebrow small">📈 Análisis comparativo</p>
-              <h2>Score vs benchmark 4.0</h2>
-            </div>
-          </div>
-          {executiveCases.length ? (
-            <div className="comparison-list">
-              {executiveCases.map((demand) => {
-                const score = scoreFromReadiness(readinessFromDemand(demand));
-                const gap = score - benchmarkScore;
-                const width = Math.min(100, Math.round((score / 5) * 100));
-                return (
-                  <div className="comparison-row" key={demand.demand_id}>
-                    <div className="comparison-label">
-                      <strong>{demand.request.title}</strong>
-                      <span>Gap {gap >= 0 ? "+" : ""}{gap.toFixed(2)}</span>
-                    </div>
-                    <div className="score-bar"><span style={{ width: `${width}%` }} /></div>
-                    <AvgScore score={score} />
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <EmptyState title="Sin datos comparativos" copy="El comparativo se activará cuando existan solicitudes persistidas." />
-          )}
-        </article>
-
-        <article className="executive-card van-card">
-          <div className="card-title-row">
-            <div>
-              <p className="eyebrow small">💰 VAN por caso</p>
-              <h2>Potencial económico</h2>
-            </div>
-          </div>
-          <div className="placeholder-chart">
-            <span>VAN</span>
-            <strong>Modelo financiero pendiente</strong>
-            <p>El tablero está diseñado para recibir VAN por iniciativa cuando se active scoring económico.</p>
-          </div>
-        </article>
-
-        <article className="executive-card gap-card">
-          <div className="card-title-row">
-            <div>
-              <p className="eyebrow small">⚠ Brechas</p>
-              <h2>Política · Arquitectura · FinOps</h2>
-            </div>
-          </div>
-          <div className="gap-bars">
-            {gapDistribution.map((item) => {
-              const max = Math.max(1, portfolioMetrics.policyGaps, portfolioMetrics.architectureGaps, portfolioMetrics.finopsGaps);
-              return (
-                <div className="gap-bar" key={item.label}>
-                  <div><span>{item.label}</span><strong>{item.value}</strong></div>
-                  <div className="bar-track"><span style={{ width: `${Math.round((item.value / max) * 100)}%` }} /></div>
-                </div>
-              );
-            })}
-          </div>
-        </article>
-      </section>
-
-      <section className="operations-grid">
-        <article className="executive-card intake-panel">
-          <div className="card-title-row">
-            <div>
-              <p className="eyebrow small">Paso 1</p>
-              <h2>Nueva solicitud de negocio</h2>
-            </div>
-            <Pill tone="neutral">Intake agent</Pill>
-          </div>
-
-          <label>
-            Título del requerimiento
-            <input value={title} onChange={(event) => setTitle(event.target.value)} />
-          </label>
-          <label>
-            Descripción
-            <textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={7} />
-          </label>
-          <label>
-            Consumo esperado
-            <select value={targetConsumption} onChange={(event) => setTargetConsumption(event.target.value)}>
-              <option>BI ejecutivo / dashboard</option>
-              <option>Machine Learning</option>
-              <option>GenAI / RAG / agente</option>
-              <option>Streaming / tiempo real</option>
-            </select>
-          </label>
-
-          <button onClick={validateRequest} disabled={mode === "loading"}>
-            {mode === "loading" ? "Validando y guardando…" : "Validar y guardar solicitud"}
-          </button>
-
-          <div className="validation-summary">
-            <div><span>Readiness estimado</span><strong>{readinessScore}%</strong></div>
-            <div><span>Patrón</span><strong>{result.architecture.architecture_pattern}</strong></div>
-            <div><span>Decisión</span><strong>{result.operative_committee.suggested_decision}</strong></div>
-          </div>
-        </article>
-
-        <article className="executive-card detail-panel">
-          <div className="card-title-row">
-            <div>
-              <p className="eyebrow small">Detalle gobernado</p>
-              <h2>{selectedDemand ? selectedDemand.demand_id : "Solicitud no seleccionada"}</h2>
-            </div>
-            {selectedDemand ? <Pill tone={statusTone(selectedDemand.status)}>{compactLabel(selectedDemand.status)}</Pill> : null}
-          </div>
-
-          {selectedDemand ? (
-            <>
-              <div className="detail-grid">
-                <div><span>Caso</span><strong>{selectedDemand.request.title}</strong></div>
-                <div><span>Área</span><strong>{selectedDemand.request.requester_area}</strong></div>
-                <div><span>Consumo</span><strong>{selectedDemand.request.target_consumption ?? "No definido"}</strong></div>
-                <div><span>Patrón</span><strong>{selectedDemand.architecture.architecture_pattern}</strong></div>
-                <div><span>Score</span><strong>{scoreFromReadiness(readinessFromDemand(selectedDemand)).toFixed(2)} / 5</strong></div>
-                <div><span>Brechas</span><strong>{demandGapCount(selectedDemand)}</strong></div>
+      {activeExperience === "intake" ? (
+        <section className="experience-layout intake-layout">
+          <article className="card intake-card">
+            <div className="section-title-row">
+              <div>
+                <p className="eyebrow small">Experiencia 01</p>
+                <h2>Nueva solicitud de negocio</h2>
+                <p className="muted-copy">Pantalla intencionalmente simple: el usuario de negocio no ve el tablero ni las acciones de comité.</p>
               </div>
+              <Pill tone="neutral">Negocio</Pill>
+            </div>
 
-              <div className="committee-strip">
-                <div>
-                  <span>Ruta comité</span>
-                  <strong>{labelize(selectedDemand.current_stage)}</strong>
+            <label>
+              Título del requerimiento
+              <input value={title} onChange={(event) => setTitle(event.target.value)} />
+            </label>
+            <label>
+              Descripción
+              <textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={8} />
+            </label>
+            <label>
+              Consumo esperado
+              <select value={targetConsumption} onChange={(event) => setTargetConsumption(event.target.value)}>
+                <option>BI ejecutivo / dashboard</option>
+                <option>Machine Learning</option>
+                <option>GenAI / RAG / agente</option>
+                <option>Streaming / tiempo real</option>
+              </select>
+            </label>
+
+            <button className="primary-action" onClick={validateRequest}>Validar y enviar a gobierno</button>
+          </article>
+
+          <aside className="card guidance-card">
+            <p className="eyebrow small">Qué pasa después</p>
+            <h2>Flujo visible para negocio</h2>
+            <ol className="workflow-list">
+              <li><strong>Registro.</strong> ATLAS captura el requerimiento y lo estructura.</li>
+              <li><strong>Validación.</strong> Los agentes revisan política, arquitectura y FinOps.</li>
+              <li><strong>Derivación.</strong> La solicitud pasa a Comité Operativo con estado trazable.</li>
+            </ol>
+            {persistedDemand ? (
+              <div className="success-receipt">
+                <span>Última solicitud registrada</span>
+                <strong>{persistedDemand.demand_id}</strong>
+                <small>{labelize(persistedDemand.status)} · {labelize(persistedDemand.decision)}</small>
+              </div>
+            ) : null}
+          </aside>
+        </section>
+      ) : null}
+
+      {activeExperience === "committee" ? (
+        <section className="experience-layout committee-layout">
+          <article className="card backlog-card">
+            <div className="section-title-row">
+              <div>
+                <p className="eyebrow small">Experiencia 02</p>
+                <h2>Cola del Comité Operativo</h2>
+                <p className="muted-copy">Diseñada para análisis, no para reporting: muestra solo lo necesario para tomar acción.</p>
+              </div>
+              <button className="secondary-action" onClick={() => void loadBacklog()}>{backlogLoading ? "Sincronizando" : "Actualizar"}</button>
+            </div>
+
+            {backlog.length ? (
+              <div className="committee-list">
+                {backlog.map((demand) => {
+                  const score = scoreFromReadiness(readinessFromDemand(demand));
+                  const priority = priorityFromDemand(demand);
+                  return (
+                    <button
+                      className={selectedDemand?.demand_id === demand.demand_id ? "queue-item active" : "queue-item"}
+                      key={demand.demand_id}
+                      onClick={() => setSelectedDemandId(demand.demand_id)}
+                    >
+                      <span className="queue-id">{demand.demand_id}</span>
+                      <strong>{demand.request.title}</strong>
+                      <small>{labelize(demand.architecture.architecture_pattern)} · {demandGapCount(demand)} brechas</small>
+                      <div className="queue-meta">
+                        <ScoreChip score={score} />
+                        <Pill tone={priorityTone(priority)}>{priority}</Pill>
+                        <Pill tone={statusTone(demand.status)}>{compactLabel(demand.status, 28)}</Pill>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <EmptyState title="Sin solicitudes en cola" copy="Cuando negocio registre solicitudes, aparecerán aquí para revisión operativa." />
+            )}
+          </article>
+
+          <article className="card detail-card">
+            {selectedDemand ? (
+              <>
+                <div className="section-title-row">
+                  <div>
+                    <p className="eyebrow small">Detalle gobernado</p>
+                    <h2>{selectedDemand.demand_id}</h2>
+                    <p className="muted-copy">{selectedDemand.request.title}</p>
+                  </div>
+                  <Pill tone={statusTone(selectedDemand.status)}>{labelize(selectedDemand.status)}</Pill>
                 </div>
-                <div className="reviewers">
-                  {demandReviewers(selectedDemand).map((reviewer) => (
-                    <Pill key={reviewer} tone={reviewer === "Data Architect" ? "risk" : "neutral"}>{reviewer}</Pill>
+
+                <div className="decision-grid">
+                  <div><span>Decisión sugerida</span><strong>{labelize(selectedDemand.decision)}</strong></div>
+                  <div><span>Patrón</span><strong>{labelize(selectedDemand.architecture.architecture_pattern)}</strong></div>
+                  <div><span>Brechas</span><strong>{demandGapCount(selectedDemand)}</strong></div>
+                  <div><span>Etapa</span><strong>{compactLabel(selectedDemand.current_stage, 36)}</strong></div>
+                </div>
+
+                <div className="committee-box">
+                  <h3>Ruta de comité</h3>
+                  <p>{selectedDemand.committee_summary}</p>
+                  <div className="reviewers">
+                    {committeeReviewers(selectedDemand).map((reviewer) => (
+                      <Pill key={reviewer} tone={reviewer === "Data Architect" ? "risk" : "neutral"}>{reviewer}</Pill>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="action-row">
+                  <button
+                    className="approve-action"
+                    disabled={actionLoading}
+                    onClick={() => void updateDemandStatus("approved_for_scoring", "approved_for_scoring", "Aprobado por Arquitecto de Datos para pasar a scoring.")}
+                  >
+                    Aprobar a scoring
+                  </button>
+                  <button
+                    className="secondary-action"
+                    disabled={actionLoading}
+                    onClick={() => void updateDemandStatus("reformulation_required", "reformulation_required", "Se requiere reformulación antes de continuar.")}
+                  >
+                    Solicitar reformulación
+                  </button>
+                  <button
+                    className="danger-action"
+                    disabled={actionLoading}
+                    onClick={() => void updateDemandStatus("rejected", "rejected", "Rechazado luego de validación final del Arquitecto de Datos.")}
+                  >
+                    Rechazar
+                  </button>
+                </div>
+
+                <div className="timeline">
+                  <h3>Timeline auditable</h3>
+                  {selectedDemand.events.map((event) => (
+                    <div className="timeline-event" key={event.event_id ?? `${event.timestamp}-${event.type}`}>
+                      <span>{formatDate(event.timestamp)}</span>
+                      <strong>{labelize(event.type)}</strong>
+                      <p>{event.comment}</p>
+                      <small>{event.actor} · {labelize(event.to_status)}</small>
+                    </div>
                   ))}
                 </div>
+              </>
+            ) : (
+              <EmptyState title="Selecciona una solicitud" copy="El detalle mostrará brechas, decisión, comité, acciones y trazabilidad." />
+            )}
+          </article>
+        </section>
+      ) : null}
+
+      {activeExperience === "dashboard" ? (
+        <section className="dashboard-experience">
+          <div className="dashboard-header">
+            <div>
+              <p className="eyebrow small">Experiencia 03</p>
+              <h2>Tablero Ejecutivo de Priorización</h2>
+              <p className="muted-copy">Inspirado en la hoja Tablero: KPIs, Top 5, distribución, benchmark, brechas y preparación financiera sin saturar el intake.</p>
+            </div>
+            <Pill tone="dark">Comité Operativo + Comité Estratégico</Pill>
+          </div>
+
+          <section className="kpi-ribbon">
+            <article className="kpi-card dark"><span>Score promedio</span><strong>{portfolioMetrics.averageScore ? portfolioMetrics.averageScore.toFixed(2) : "—"}</strong><small>de 5.00 puntos</small></article>
+            <article className="kpi-card"><span>Alta prioridad</span><strong>{portfolioMetrics.highPriority}</strong><small>casos priorizados</small></article>
+            <article className="kpi-card"><span>VAN priorizado</span><strong>Preparado</strong><small>Sprint 09: modelo financiero</small></article>
+            <article className="kpi-card"><span>Solicitudes</span><strong>{portfolioMetrics.total}</strong><small>backlog persistente</small></article>
+            <article className="kpi-card"><span>En revisión</span><strong>{portfolioMetrics.inReview}</strong><small>comité / arquitectura</small></article>
+            <article className="kpi-card"><span>Eventos</span><strong>{portfolioMetrics.events}</strong><small>trazabilidad</small></article>
+          </section>
+
+          <section className="executive-grid">
+            <article className="card board-card top-cases-card">
+              <div className="section-title-row">
+                <div>
+                  <h3>Top 5 casos prioritarios</h3>
+                  <p className="muted-copy">Ranking temporal por score operativo. El score financiero formal se incorpora en Sprint 09.</p>
+                </div>
               </div>
+              {executiveCases.length ? (
+                <div className="top-table">
+                  <div className="table-row header"><span>#</span><span>Solicitud</span><span>Score</span><span>Prioridad</span><span>Estado</span></div>
+                  {executiveCases.map((demand, index) => {
+                    const score = scoreFromReadiness(readinessFromDemand(demand));
+                    const priority = priorityFromDemand(demand);
+                    return (
+                      <button className="table-row interactive" key={demand.demand_id} onClick={() => { setSelectedDemandId(demand.demand_id); setActiveExperience("committee"); }}>
+                        <span>{index + 1}</span>
+                        <span><strong>{compactLabel(demand.request.title, 46)}</strong><small>{demand.demand_id}</small></span>
+                        <span><ScoreChip score={score} /></span>
+                        <span><Pill tone={priorityTone(priority)}>{priority}</Pill></span>
+                        <span><Pill tone={statusTone(demand.status)}>{compactLabel(demand.status, 24)}</Pill></span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <EmptyState title="Sin casos priorizados" copy="Registra solicitudes desde Intake para poblar el tablero ejecutivo." />
+              )}
+            </article>
 
-              <p className="committee-summary">{selectedDemand.committee_summary}</p>
-
-              <div className="action-row">
-                <button
-                  className="secondary-button"
-                  onClick={() => void updateDemandStatus("approved_for_scoring", "approved_for_scoring", "Aprobado por Arquitecto de Datos para pasar a scoring operativo.")}
-                  disabled={actionLoading}
-                >
-                  Aprobar a scoring
-                </button>
-                <button
-                  className="ghost-button"
-                  onClick={() => void updateDemandStatus("reformulation_required", "reformulation_required", "Se solicita reformulación para cerrar brechas antes del scoring.")}
-                  disabled={actionLoading}
-                >
-                  Reformular
-                </button>
-                <button
-                  className="danger-button"
-                  onClick={() => void updateDemandStatus("rejected", "rejected_after_architect_review", "Rechazado luego de validación final del Arquitecto de Datos.")}
-                  disabled={actionLoading}
-                >
-                  Rechazar
-                </button>
+            <article className="card board-card distribution-card">
+              <h3>Distribución por prioridad</h3>
+              <div className="bar-list">
+                {priorityDistribution.map((item) => {
+                  const pct = percentage(item.value, Math.max(1, portfolioMetrics.total));
+                  return (
+                    <div className="bar-item" key={item.label}>
+                      <div><Pill tone={item.tone}>{item.label}</Pill><strong>{item.value}</strong></div>
+                      <span className="bar-track"><span style={{ width: `${pct}%` }} /></span>
+                    </div>
+                  );
+                })}
               </div>
+            </article>
 
-              <div className="timeline">
-                <div className="timeline-title">Timeline de trazabilidad</div>
-                {selectedDemand.events.slice().reverse().map((event) => (
-                  <div className="timeline-event" key={event.event_id ?? `${event.timestamp}-${event.type}`}>
-                    <span>{formatDate(event.timestamp)}</span>
-                    <strong>{labelize(event.type)} · {event.actor}</strong>
-                    <p>{event.comment}</p>
-                    <small>{labelize(event.from_status)} → {labelize(event.to_status)}</small>
-                  </div>
+            <article className="card board-card benchmark-card">
+              <h3>Score vs benchmark 4.0</h3>
+              <div className="benchmark-list">
+                {executiveCases.length ? executiveCases.map((demand) => {
+                  const score = scoreFromReadiness(readinessFromDemand(demand));
+                  const pct = Math.min(100, Math.round((score / 5) * 100));
+                  return (
+                    <div className="benchmark-item" key={demand.demand_id}>
+                      <div><strong>{compactLabel(demand.request.title, 34)}</strong><span>{(score - benchmarkScore).toFixed(2)} gap</span></div>
+                      <span className="bar-track benchmark"><span style={{ width: `${pct}%` }} /></span>
+                    </div>
+                  );
+                }) : <EmptyState title="Benchmark pendiente" copy="El comparativo se activa con solicitudes persistidas." />}
+              </div>
+            </article>
+
+            <article className="card board-card finance-card">
+              <h3>Métricas financieras clave</h3>
+              <div className="finance-placeholder">
+                <div><span>VAN Total</span><strong>—</strong></div>
+                <div><span>TIR Máxima</span><strong>—</strong></div>
+                <div><span>Payback Prom.</span><strong>—</strong></div>
+                <div><span>ROI Prom.</span><strong>—</strong></div>
+              </div>
+              <p className="muted-copy">No se inventan valores financieros. El Sprint 09 agregará captura, cálculo y ranking por VAN, TIR, ROI y payback.</p>
+            </article>
+
+            <article className="card board-card gaps-card">
+              <h3>Brechas agregadas</h3>
+              <div className="gap-summary">
+                {gapDistribution.map((item) => (
+                  <div key={item.label}><span>{item.label}</span><strong>{item.value}</strong></div>
                 ))}
               </div>
-            </>
-          ) : (
-            <EmptyState title="Selecciona una solicitud" copy="Crea o selecciona una demanda para ver su detalle, comité y trazabilidad." />
-          )}
-        </article>
-      </section>
-
-      <section className="executive-card architecture-card">
-        <div className="card-title-row">
-          <div>
-            <p className="eyebrow small">Arquitectura end-to-end</p>
-            <h2>Lectura ejecutiva de cumplimiento</h2>
-          </div>
-          <Pill tone={selectedDemand?.architecture.is_compliant ? "ok" : "warn"}>{selectedDemand?.architecture.is_compliant ? "Cumple" : "Con brechas"}</Pill>
-        </div>
-        {selectedDemand ? (
-          <div className="gaps-grid">
-            <div className="gap-box"><span>Política</span><strong>{selectedDemand.policy_gaps.length}</strong><p>{selectedDemand.policy_gaps[0] ?? "Sin brechas"}</p></div>
-            <div className="gap-box"><span>Arquitectura</span><strong>{selectedDemand.architecture_gaps.length}</strong><p>{selectedDemand.architecture_gaps[0] ?? "Sin brechas"}</p></div>
-            <div className="gap-box"><span>FinOps</span><strong>{selectedDemand.finops_gaps.length}</strong><p>{selectedDemand.finops_gaps[0] ?? "Sin brechas"}</p></div>
-          </div>
-        ) : (
-          <div className="gaps-grid">
-            <div className="gap-box"><span>Política</span><strong>{result.policy_gaps.length}</strong><p>{result.policy_gaps[0]}</p></div>
-            <div className="gap-box"><span>Arquitectura</span><strong>{result.architecture.architecture_gaps.length}</strong><p>{result.architecture.architecture_gaps[0]}</p></div>
-            <div className="gap-box"><span>FinOps</span><strong>{result.finops_gaps.length}</strong><p>{result.finops_gaps[0]}</p></div>
-          </div>
-        )}
-      </section>
+            </article>
+          </section>
+        </section>
+      ) : null}
     </main>
   );
 }
