@@ -1,0 +1,188 @@
+"""Local demand backlog persistence for ATLAS DataGob.
+
+This module intentionally uses a lightweight JSON store for the MVP. It keeps
+requests, validation outputs, committee decisions and lifecycle events in one
+place so the product can demonstrate traceability before moving to a managed
+store such as Firestore, AlloyDB, Cloud SQL or BigQuery.
+"""
+from __future__ import annotations
+
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+from uuid import uuid4
+
+DEFAULT_BACKLOG_PATH = Path("data/runtime/demand_backlog.json")
+
+VALID_DEMAND_STATUSES = {
+    "draft",
+    "intake_validated",
+    "operative_committee_review",
+    "reformulation_required",
+    "approved_for_scoring",
+    "rejected",
+    "mvp_candidate",
+    "production_candidate",
+}
+
+
+def utc_now() -> str:
+    """Return an ISO timestamp suitable for audit events."""
+
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+def load_demand_records(path: str | Path = DEFAULT_BACKLOG_PATH) -> list[dict]:
+    """Load all demand records from the JSON backlog."""
+
+    backlog_path = Path(path)
+    if not backlog_path.exists():
+        return []
+    with backlog_path.open("r", encoding="utf-8") as file:
+        payload = json.load(file)
+    if isinstance(payload, list):
+        return payload
+    raise ValueError(f"Invalid demand backlog payload in {backlog_path}")
+
+
+def write_demand_records(records: list[dict], path: str | Path = DEFAULT_BACKLOG_PATH) -> None:
+    """Persist all demand records to the JSON backlog."""
+
+    backlog_path = Path(path)
+    backlog_path.parent.mkdir(parents=True, exist_ok=True)
+    with backlog_path.open("w", encoding="utf-8") as file:
+        json.dump(records, file, indent=2, ensure_ascii=False)
+        file.write("\n")
+
+
+def infer_initial_status(validation_result: dict) -> str:
+    """Map an agent recommendation to an initial backlog status."""
+
+    next_action = validation_result.get("recommended_next_action") or validation_result.get("operative_committee", {}).get(
+        "suggested_decision"
+    )
+    if next_action in {"approve_for_scoring", "approved_for_scoring"}:
+        return "approved_for_scoring"
+    if next_action in {"reject", "rejected"}:
+        return "rejected"
+    if next_action in {"reformulation_required", "request_more_info"}:
+        return "reformulation_required"
+    if next_action in {"architect_review", "architecture_exception_or_reformulation"}:
+        return "operative_committee_review"
+    return "intake_validated"
+
+
+def demand_id_for(now: str) -> str:
+    """Create a compact business-friendly demand id."""
+
+    date_token = now[:10].replace("-", "")
+    return f"DEM-{date_token}-{uuid4().hex[:8].upper()}"
+
+
+def create_demand_record(
+    validation_result: dict,
+    *,
+    path: str | Path = DEFAULT_BACKLOG_PATH,
+    actor: str = "ATLAS DataGob",
+) -> dict:
+    """Create and persist a demand record from a policy/architecture validation result."""
+
+    now = utc_now()
+    request = validation_result.get("structured_request", {})
+    committee = validation_result.get("operative_committee", {})
+    status = infer_initial_status(validation_result)
+    decision = committee.get("suggested_decision") or validation_result.get("recommended_next_action") or "pending"
+    current_stage = committee.get("committee_stage") or committee.get("route") or "intake_validated"
+
+    record = {
+        "demand_id": demand_id_for(now),
+        "created_at": now,
+        "updated_at": now,
+        "status": status,
+        "decision": decision,
+        "current_stage": current_stage,
+        "request": request,
+        "classification": validation_result.get("classification", {}),
+        "architecture": validation_result.get("architecture", {}),
+        "policy_gaps": validation_result.get("policy_gaps", []),
+        "architecture_gaps": validation_result.get("architecture_gaps", []),
+        "finops_gaps": validation_result.get("finops_gaps", []),
+        "committee": committee,
+        "committee_summary": validation_result.get("committee_summary", ""),
+        "agent_trace": validation_result.get("agent_trace", []),
+        "events": [
+            {
+                "event_id": f"EVT-{uuid4().hex[:8].upper()}",
+                "timestamp": now,
+                "type": "demand_created",
+                "actor": actor,
+                "from_status": None,
+                "to_status": status,
+                "decision": decision,
+                "comment": "Solicitud validada y registrada en el backlog de demanda.",
+            }
+        ],
+    }
+
+    records = load_demand_records(path)
+    records.append(record)
+    write_demand_records(records, path)
+    return record
+
+
+def list_demand_records(status: str | None = None, path: str | Path = DEFAULT_BACKLOG_PATH) -> list[dict]:
+    """List demand records, newest first, optionally filtered by status."""
+
+    records = load_demand_records(path)
+    if status:
+        records = [record for record in records if record.get("status") == status]
+    return sorted(records, key=lambda item: item.get("created_at", ""), reverse=True)
+
+
+def get_demand_record(demand_id: str, path: str | Path = DEFAULT_BACKLOG_PATH) -> dict | None:
+    """Return one demand record by id."""
+
+    for record in load_demand_records(path):
+        if record.get("demand_id") == demand_id:
+            return record
+    return None
+
+
+def update_demand_record_status(
+    demand_id: str,
+    *,
+    status: str,
+    decision: str | None = None,
+    comment: str | None = None,
+    actor: str = "Data Architect",
+    path: str | Path = DEFAULT_BACKLOG_PATH,
+) -> dict | None:
+    """Update the status/decision of one demand record and append an audit event."""
+
+    if status not in VALID_DEMAND_STATUSES:
+        raise ValueError(f"Invalid demand status: {status}")
+
+    records = load_demand_records(path)
+    now = utc_now()
+    for record in records:
+        if record.get("demand_id") != demand_id:
+            continue
+        previous_status = record.get("status")
+        record["status"] = status
+        record["decision"] = decision or record.get("decision") or status
+        record["updated_at"] = now
+        record.setdefault("events", []).append(
+            {
+                "event_id": f"EVT-{uuid4().hex[:8].upper()}",
+                "timestamp": now,
+                "type": "status_changed",
+                "actor": actor,
+                "from_status": previous_status,
+                "to_status": status,
+                "decision": record["decision"],
+                "comment": comment or "Actualización de estado registrada.",
+            }
+        )
+        write_demand_records(records, path)
+        return record
+    return None
