@@ -19,7 +19,13 @@ from atlas_datagob.services.demand_backlog import (
     create_demand_record,
     get_demand_record,
     list_demand_records,
+    update_demand_record_scoring,
     update_demand_record_status,
+)
+from atlas_datagob.services.financial_scoring import (
+    FinancialAssumptions,
+    GovernedScoringInput,
+    calculate_governed_scoring,
 )
 from atlas_datagob.services.policy_architecture_validation import (
     IntakeValidationContext,
@@ -43,7 +49,7 @@ DATA_ROOT = Path("data")
 DOMAINS_PATH = DATA_ROOT / "synthetic" / "domains" / "domains.json"
 DICTIONARY_PATH = DATA_ROOT / "canonical" / "data_dictionary.json"
 ER_MODEL_PATH = DATA_ROOT / "canonical" / "entity_relationship_model.json"
-API_VERSION = "0.5.0"
+API_VERSION = "0.6.0"
 
 
 def _allowed_origins() -> list[str]:
@@ -94,6 +100,15 @@ if FastAPI:
         data_readiness: int = Field(ge=1, le=5)
         governance_risk: int = Field(ge=1, le=5)
         technical_feasibility: int = Field(ge=1, le=5)
+
+    class DemandFinancialScoringPayload(ScoringPayload):
+        initial_investment_usd: float = Field(ge=0)
+        annual_benefit_usd: float = Field(ge=0)
+        annual_operating_cost_usd: float = Field(default=0, ge=0)
+        time_horizon_years: int = Field(default=3, ge=1, le=10)
+        discount_rate: float = Field(default=0.12, ge=0, le=1)
+        actor: str = "Portfolio Owner"
+        comment: str | None = None
 
     @app.get("/health")
     def health() -> dict:
@@ -150,6 +165,39 @@ if FastAPI:
         if not record:
             raise HTTPException(status_code=404, detail="Demand record not found")
         return {"demand": record}
+
+    @app.post("/demands/{demand_id}/score")
+    def demand_score_update(demand_id: str, payload: DemandFinancialScoringPayload) -> dict:
+        try:
+            scoring_input = ScoringInput(
+                strategic_alignment=payload.strategic_alignment,
+                business_value=payload.business_value,
+                urgency=payload.urgency,
+                data_readiness=payload.data_readiness,
+                governance_risk=payload.governance_risk,
+                technical_feasibility=payload.technical_feasibility,
+            )
+            financial_input = FinancialAssumptions(
+                initial_investment_usd=payload.initial_investment_usd,
+                annual_benefit_usd=payload.annual_benefit_usd,
+                annual_operating_cost_usd=payload.annual_operating_cost_usd,
+                time_horizon_years=payload.time_horizon_years,
+                discount_rate=payload.discount_rate,
+            )
+            scoring_result = calculate_governed_scoring(
+                GovernedScoringInput(scoring=scoring_input, financials=financial_input)
+            )
+            record = update_demand_record_scoring(
+                demand_id,
+                scoring_result=scoring_result,
+                actor=payload.actor,
+                comment=payload.comment,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if not record:
+            raise HTTPException(status_code=404, detail="Demand record not found")
+        return {"demand": record, "scoring": scoring_result}
 
     @app.get("/policies")
     def policies() -> dict:
