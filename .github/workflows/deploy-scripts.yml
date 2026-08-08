@@ -17,3 +17,5 @@ jobs:
         run: make validate-authenticated-cloud-smoke-script
       - name: Validate pilot evidence collector
         run: make validate-pilot-evidence-script
+      - name: Validate production promotion gate
+        run: make validate-production-promotion-gate-script
