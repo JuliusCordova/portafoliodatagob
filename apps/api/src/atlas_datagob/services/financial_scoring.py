@@ -1,7 +1,8 @@
 """Governed financial scoring for ATLAS DataGob.
 
-The financial model is intentionally explicit: it only calculates VAN/NPV, ROI,
-payback and TIR/IRR when the committee provides economic assumptions. This avoids
+The financial model is intentionally explicit: it only calculates or registers
+VAN/NPV, ROI, payback and TIR/IRR when the Data Owner, committee or portfolio
+owner provides economic assumptions or direct financial metrics. This avoids
 inventing financial values from the intake text and keeps the dashboard auditable.
 """
 from __future__ import annotations
@@ -24,11 +25,29 @@ class FinancialAssumptions:
 
 
 @dataclass(frozen=True)
+class DirectFinancialMetrics:
+    """Direct financial metrics provided by the Data Owner."""
+
+    roi_percent: float
+    van_usd: float
+    tir_percent: float
+    payback_years: float
+
+
+@dataclass(frozen=True)
 class GovernedScoringInput:
     """Combined prioritization and financial scoring input."""
 
     scoring: ScoringInput
     financials: FinancialAssumptions
+
+
+@dataclass(frozen=True)
+class GovernedDirectScoringInput:
+    """Combined prioritization and direct financial metrics input."""
+
+    scoring: ScoringInput
+    financials: DirectFinancialMetrics
 
 
 def _validate_assumptions(assumptions: FinancialAssumptions) -> None:
@@ -42,6 +61,11 @@ def _validate_assumptions(assumptions: FinancialAssumptions) -> None:
         raise ValueError("time_horizon_years must be between 1 and 10")
     if assumptions.discount_rate < 0 or assumptions.discount_rate > 1:
         raise ValueError("discount_rate must be between 0 and 1")
+
+
+def _validate_direct_metrics(metrics: DirectFinancialMetrics) -> None:
+    if metrics.payback_years < 0:
+        raise ValueError("payback_years must be greater than or equal to 0")
 
 
 def cashflows_for(assumptions: FinancialAssumptions) -> list[float]:
@@ -102,6 +126,40 @@ def irr(cashflows: list[float]) -> float | None:
     return round((low + high) / 2, 4)
 
 
+def _bucket(value: float, thresholds: tuple[float, float, float, float]) -> int:
+    if value >= thresholds[0]:
+        return 5
+    if value >= thresholds[1]:
+        return 4
+    if value >= thresholds[2]:
+        return 3
+    if value >= thresholds[3]:
+        return 2
+    return 1
+
+
+def financial_score_from_direct_metrics(metrics: DirectFinancialMetrics) -> float:
+    """Calculate a 1-to-5 financial score from Data Owner metrics."""
+
+    _validate_direct_metrics(metrics)
+    roi_score = _bucket(metrics.roi_percent, (80, 60, 35, 20))
+    van_score = _bucket(metrics.van_usd, (50000, 25000, 10000, 1))
+    tir_score = _bucket(metrics.tir_percent, (60, 30, 18, 10))
+
+    if metrics.payback_years <= 1:
+        payback_score = 5
+    elif metrics.payback_years <= 2:
+        payback_score = 4
+    elif metrics.payback_years <= 3:
+        payback_score = 3
+    elif metrics.payback_years <= 5:
+        payback_score = 2
+    else:
+        payback_score = 1
+
+    return round((roi_score + van_score + tir_score + payback_score) / 4, 2)
+
+
 def calculate_financial_metrics(assumptions: FinancialAssumptions) -> dict:
     """Calculate economic metrics from explicit committee assumptions."""
 
@@ -116,10 +174,15 @@ def calculate_financial_metrics(assumptions: FinancialAssumptions) -> dict:
     payback = payback_months(flows)
 
     return {
+        "input_mode": "assumptions",
         "van_usd": van,
         "tir": tir,
+        "tir_percent": round(tir * 100, 2) if tir is not None else None,
         "roi": roi,
+        "roi_percent": round(roi * 100, 2) if roi is not None else None,
         "payback_months": payback,
+        "payback_years": round(payback / 12, 2) if payback is not None else None,
+        "financial_score": None,
         "cashflows": [round(value, 2) for value in flows],
         "assumptions": {
             "initial_investment_usd": assumptions.initial_investment_usd,
@@ -131,15 +194,38 @@ def calculate_financial_metrics(assumptions: FinancialAssumptions) -> dict:
     }
 
 
+def direct_financial_metrics(metrics: DirectFinancialMetrics) -> dict:
+    """Register direct economic metrics from the Data Owner checklist."""
+
+    score = financial_score_from_direct_metrics(metrics)
+    return {
+        "input_mode": "direct_metrics",
+        "van_usd": metrics.van_usd,
+        "tir": round(metrics.tir_percent / 100, 4),
+        "tir_percent": metrics.tir_percent,
+        "roi": round(metrics.roi_percent / 100, 4),
+        "roi_percent": metrics.roi_percent,
+        "payback_months": round(metrics.payback_years * 12, 1),
+        "payback_years": metrics.payback_years,
+        "financial_score": score,
+        "cashflows": None,
+        "assumptions": None,
+    }
+
+
+def _financial_signal(financials: dict) -> str:
+    if financials["van_usd"] > 0:
+        return "positive"
+    if financials["van_usd"] == 0:
+        return "neutral"
+    return "negative_or_pending"
+
+
 def calculate_governed_scoring(input_data: GovernedScoringInput) -> dict:
     """Calculate priority score and financial metrics as one governed result."""
 
     score = calculate_priority_score(input_data.scoring)
     financials = calculate_financial_metrics(input_data.financials)
-
-    financial_signal = "positive" if financials["van_usd"] > 0 else "negative_or_pending"
-    if financials["van_usd"] == 0:
-        financial_signal = "neutral"
 
     return {
         "score": score.score,
@@ -147,7 +233,25 @@ def calculate_governed_scoring(input_data: GovernedScoringInput) -> dict:
         "rationale": score.rationale,
         "components": score.components,
         "financials": financials,
-        "financial_signal": financial_signal,
+        "financial_signal": _financial_signal(financials),
         "model_version": "scoring-financial-v1",
         "governance_note": "Financial metrics are calculated only from explicit committee assumptions.",
+    }
+
+
+def calculate_governed_direct_scoring(input_data: GovernedDirectScoringInput) -> dict:
+    """Calculate priority score and register Data Owner financial metrics."""
+
+    score = calculate_priority_score(input_data.scoring)
+    financials = direct_financial_metrics(input_data.financials)
+
+    return {
+        "score": score.score,
+        "priority": score.priority,
+        "rationale": score.rationale,
+        "components": score.components,
+        "financials": financials,
+        "financial_signal": _financial_signal(financials),
+        "model_version": "scoring-financial-v1-direct-metrics",
+        "governance_note": "Financial metrics were provided by the Data Owner checklist and persisted with audit trail.",
     }
