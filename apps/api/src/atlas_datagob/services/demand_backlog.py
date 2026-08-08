@@ -22,9 +22,19 @@ VALID_DEMAND_STATUSES = {
     "approved_for_scoring",
     "scored",
     "rejected",
+    "closed",
     "archived",
     "mvp_candidate",
     "production_candidate",
+}
+
+_EDITABLE_REQUEST_FIELDS = {
+    "title",
+    "description",
+    "requester_area",
+    "requester_role",
+    "domain_hint",
+    "target_consumption",
 }
 
 
@@ -54,6 +64,12 @@ def _event(
         "decision": decision,
         "comment": comment,
     }
+
+
+def _clean_mapping(payload: dict | None) -> dict:
+    if not payload:
+        return {}
+    return {key: value for key, value in payload.items() if value is not None}
 
 
 def load_demand_records(path: str | Path = DEFAULT_BACKLOG_PATH) -> list[dict]:
@@ -134,6 +150,8 @@ def create_demand_record(
         "committee": committee,
         "committee_summary": validation_result.get("committee_summary", ""),
         "agent_trace": validation_result.get("agent_trace", []),
+        "business_inputs": {},
+        "committee_inputs": {},
         "events": [
             _event(
                 event_type="demand_created",
@@ -168,6 +186,62 @@ def get_demand_record(demand_id: str, path: str | Path = DEFAULT_BACKLOG_PATH) -
     for record in load_demand_records(path):
         if record.get("demand_id") == demand_id:
             return record
+    return None
+
+
+def update_demand_record(
+    demand_id: str,
+    *,
+    request_update: dict | None = None,
+    business_inputs: dict | None = None,
+    committee_inputs: dict | None = None,
+    validation_state: str | None = None,
+    decision: str | None = None,
+    actor: str = "Data Steward",
+    comment: str | None = None,
+    path: str | Path = DEFAULT_BACKLOG_PATH,
+) -> dict | None:
+    """Update editable demand fields and append an audit event."""
+
+    records = load_demand_records(path)
+    now = utc_now()
+    for record in records:
+        if record.get("demand_id") != demand_id:
+            continue
+
+        previous_status = record.get("status")
+        request_payload = _clean_mapping(request_update)
+        if request_payload:
+            editable_request = {key: value for key, value in request_payload.items() if key in _EDITABLE_REQUEST_FIELDS}
+            record.setdefault("request", {}).update(editable_request)
+
+        business_payload = _clean_mapping(business_inputs)
+        if business_payload:
+            record.setdefault("business_inputs", {}).update(business_payload)
+
+        committee_payload = _clean_mapping(committee_inputs)
+        if committee_payload:
+            record.setdefault("committee_inputs", {}).update(committee_payload)
+
+        if validation_state:
+            record["validation_state"] = validation_state
+        if decision:
+            record["decision"] = decision
+
+        record["updated_at"] = now
+        record.setdefault("events", []).append(
+            _event(
+                event_type="demand_updated",
+                actor=actor,
+                from_status=previous_status,
+                to_status=record.get("status", "intake_validated"),
+                decision=record.get("decision"),
+                comment=comment or "Campos editables de la demanda actualizados.",
+                timestamp=now,
+            )
+        )
+        write_demand_records(records, path)
+        return record
     return None
 
 
