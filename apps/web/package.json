@@ -1,11 +1,12 @@
 {
   "name": "atlas-datagob-web",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "lint": "next lint"
+    "typecheck": "tsc --noEmit",
+    "verify": "npm run typecheck && npm run build"
   },
   "dependencies": {
     "@types/node": "latest",
