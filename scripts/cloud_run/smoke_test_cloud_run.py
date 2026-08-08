@@ -95,6 +95,13 @@ def main() -> int:
         assert "ATLAS" in html or "DataGob" in html or "__next" in html, "unexpected web payload"
         return "Web root reachable"
 
+    def web_session() -> str:
+        payload = request_json(f"{web_url}/api/session")
+        session = payload.get("session", {})
+        assert session.get("user"), payload
+        assert isinstance(session.get("roles"), list), payload
+        return f"Web session reachable, mode={session.get('mode')}, user={session.get('user')}"
+
     def web_proxy_cases() -> str:
         payload = request_json(f"{web_url}/api/demo/cases")
         count = payload.get("count", 0)
@@ -104,6 +111,7 @@ def main() -> int:
     results.append(retry_check("api_health", api_health))
     results.append(retry_check("api_demo_cases", api_demo_cases))
     results.append(retry_check("web_root", web_root))
+    results.append(retry_check("web_session", web_session))
     results.append(retry_check("web_proxy_cases", web_proxy_cases))
 
     if allow_mutating_reset:
