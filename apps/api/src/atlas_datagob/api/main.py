@@ -7,6 +7,13 @@ from typing import Any
 
 from atlas_datagob.agents.policy_intake_agent import PolicyIntakeAgent
 from atlas_datagob.domain.models import DemandRequest, ScoringInput
+from atlas_datagob.services.authz import (
+    AuthenticationError,
+    AuthorizationError,
+    AuthConfigurationError,
+    auth_snapshot,
+    authorize_request,
+)
 from atlas_datagob.services.canonical_catalog import (
     dictionary_to_response,
     er_model_to_response,
@@ -43,11 +50,13 @@ from atlas_datagob.services.scoring import calculate_priority_score
 try:
     from fastapi import FastAPI, HTTPException
     from fastapi.middleware.cors import CORSMiddleware
+    from fastapi.responses import JSONResponse
     from pydantic import BaseModel, Field
 except Exception:  # pragma: no cover
     FastAPI = None  # type: ignore
     HTTPException = Exception  # type: ignore
     CORSMiddleware = None  # type: ignore
+    JSONResponse = None  # type: ignore
     BaseModel = object  # type: ignore
     Field = None  # type: ignore
 
@@ -56,7 +65,7 @@ DATA_ROOT = Path("data")
 DOMAINS_PATH = DATA_ROOT / "synthetic" / "domains" / "domains.json"
 DICTIONARY_PATH = DATA_ROOT / "canonical" / "data_dictionary.json"
 ER_MODEL_PATH = DATA_ROOT / "canonical" / "entity_relationship_model.json"
-API_VERSION = "0.6.2"
+API_VERSION = "0.6.3"
 
 
 def _allowed_origins() -> list[str]:
@@ -83,6 +92,18 @@ if FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.middleware("http")
+    async def authz_middleware(request, call_next):
+        try:
+            authorize_request(request.method, request.url.path, request.headers)
+        except AuthConfigurationError as exc:
+            return JSONResponse(status_code=500, content={"detail": str(exc)})
+        except AuthenticationError as exc:
+            return JSONResponse(status_code=401, content={"detail": str(exc)})
+        except AuthorizationError as exc:
+            return JSONResponse(status_code=403, content={"detail": str(exc)})
+        return await call_next(request)
 
     class DemandPayload(BaseModel):
         title: str = Field(min_length=3)
@@ -154,6 +175,10 @@ if FastAPI:
     @app.get("/health")
     def health() -> dict:
         return {"status": "ok", "product": "ATLAS DataGob", "version": API_VERSION}
+
+    @app.get("/auth/permissions")
+    def auth_permissions() -> dict:
+        return auth_snapshot()
 
     @app.post("/intake/classify")
     def classify(payload: DemandPayload) -> dict:
