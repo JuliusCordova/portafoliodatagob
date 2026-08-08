@@ -1,4 +1,4 @@
-.PHONY: test test-api lint-local validate-contracts smoke-policy seed-demo dev-api dev-web docker-build docker-build-api docker-build-web
+.PHONY: test test-api lint-local validate-contracts smoke-policy seed-demo dev-api dev-web docker-build docker-build-api docker-build-web deploy-validate deploy-api deploy-web deploy-verify validate-deploy-scripts
 
 test: test-api validate-contracts smoke-policy
 
@@ -30,3 +30,18 @@ docker-build-api:
 
 docker-build-web:
 	docker build -f apps/web/Dockerfile -t atlas-datagob-web:local apps/web
+
+validate-deploy-scripts:
+	bash -n scripts/cloud_run/*.sh
+
+deploy-validate:
+	bash scripts/cloud_run/validate_cloud_run_env.sh all
+
+deploy-api:
+	bash scripts/cloud_run/deploy_api.sh
+
+deploy-web:
+	bash scripts/cloud_run/deploy_web.sh
+
+deploy-verify:
+	bash scripts/cloud_run/verify_post_deploy.sh
