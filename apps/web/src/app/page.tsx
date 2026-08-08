@@ -18,15 +18,17 @@ type ValidationResult = {
   policy_gaps: string[];
   finops_gaps: string[];
   operative_committee: {
-    route: string;
-    required_reviewers: string[];
+    route?: string;
+    committee_stage?: string;
+    required_reviewers?: string[];
+    required_review_roles?: string[];
     suggested_decision: string;
-    data_architect_final_validation_required: boolean;
+    data_architect_final_validation_required?: boolean;
   };
   committee_summary: string;
 };
 
-type RuntimeMode = "demo" | "api" | "error";
+type RuntimeMode = "demo" | "api" | "error" | "loading";
 
 const defaultResult: ValidationResult = {
   classification: {
@@ -109,7 +111,12 @@ function GapList({ title, items, tone }: { title: string; items: string[]; tone:
 function runtimeLabel(mode: RuntimeMode) {
   if (mode === "api") return "API conectada";
   if (mode === "error") return "Error conexión";
+  if (mode === "loading") return "Validando";
   return "Demo local";
+}
+
+function committeeReviewers(result: ValidationResult): string[] {
+  return result.operative_committee.required_reviewers ?? result.operative_committee.required_review_roles ?? [];
 }
 
 export default function HomePage() {
@@ -128,16 +135,10 @@ export default function HomePage() {
   }, [result]);
 
   async function validateRequest() {
-    const baseUrl = process.env.NEXT_PUBLIC_ATLAS_API_BASE;
-    if (!baseUrl) {
-      setMode("demo");
-      setConnectionMessage("Variable NEXT_PUBLIC_ATLAS_API_BASE no configurada. Usando modo demo local.");
-      setResult(defaultResult);
-      return;
-    }
     try {
-      setConnectionMessage(`Validando contra ${baseUrl}...`);
-      const response = await fetch(`${baseUrl}/intake/policy-architecture-validate`, {
+      setMode("loading");
+      setConnectionMessage("Validando por proxy interno Next.js → FastAPI localhost:8000...");
+      const response = await fetch("/api/intake/validate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -149,10 +150,13 @@ export default function HomePage() {
           target_consumption: targetConsumption
         })
       });
-      if (!response.ok) throw new Error(`API validation failed with HTTP ${response.status}`);
-      const payload = (await response.json()) as ValidationResult;
+      const responseText = await response.text();
+      if (!response.ok) {
+        throw new Error(`Proxy/API validation failed with HTTP ${response.status}: ${responseText}`);
+      }
+      const payload = JSON.parse(responseText) as ValidationResult;
       setMode("api");
-      setConnectionMessage(`Conectado correctamente a ${baseUrl}.`);
+      setConnectionMessage("Conectado correctamente por proxy interno Next.js → FastAPI localhost:8000.");
       setResult(payload);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Error desconocido al conectar con el API.";
@@ -166,7 +170,7 @@ export default function HomePage() {
     <main className="shell">
       <section className="hero">
         <div>
-          <p className="eyebrow">ATLAS DataGob · Sprint 06.1</p>
+          <p className="eyebrow">ATLAS DataGob · Sprint 06.2</p>
           <h1>Intake multiagente con validación de políticas y arquitectura</h1>
           <p className="hero-copy">
             Captura el requerimiento, detecta brechas contra políticas, valida la arquitectura canónica Google Cloud y deriva al Comité Operativo con decisión final del Arquitecto de Datos.
@@ -258,7 +262,7 @@ export default function HomePage() {
             <h3>Ruta Comité Operativo</h3>
             <p>{result.committee_summary}</p>
             <div className="reviewers">
-              {result.operative_committee.required_reviewers.map((reviewer) => (
+              {committeeReviewers(result).map((reviewer) => (
                 <Pill key={reviewer} tone={reviewer === "Data Architect" ? "risk" : "neutral"}>{reviewer}</Pill>
               ))}
             </div>
