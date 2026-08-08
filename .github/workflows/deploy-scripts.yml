@@ -11,3 +11,5 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate Cloud Run deploy scripts
         run: make validate-deploy-scripts
+      - name: Validate Cloud Run smoke script
+        run: make validate-cloud-smoke-script
