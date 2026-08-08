@@ -2,98 +2,108 @@
 
 ## Objetivo
 
-Convertir ATLAS DataGob en un cockpit operativo de gobierno de demanda, donde las solicitudes persistidas puedan consultarse, seleccionarse y avanzar de estado con trazabilidad auditable.
+Convertir ATLAS DataGob en un cockpit ejecutivo de gobierno de demanda, inspirado en la estructura conceptual de la hoja **Tablero** del workbook de referencia.
 
-## Alcance implementado
+El tablero de Excel se usa solo como referencia de composición ejecutiva: KPIs, Top casos, distribución de prioridad, análisis comparativo, VAN por caso y métricas financieras. La implementación mantiene el branding neutral de ATLAS DataGob y no incorpora identidad ni datos específicos de cliente.
 
-### Frontend
+## Inspiración tomada del tablero Excel
 
-- Hero actualizado a `ATLAS DataGob · Sprint 08`.
-- Métricas ejecutivas de backlog:
-  - solicitudes registradas,
-  - solicitudes en revisión,
-  - solicitudes aprobadas,
-  - eventos de trazabilidad.
-- Tabla de backlog con:
-  - `demand_id`,
-  - estado,
-  - patrón arquitectónico,
-  - número de brechas,
-  - decisión sugerida.
-- Panel de detalle de solicitud con:
-  - resumen de comité,
-  - consumo esperado,
-  - patrón,
-  - decisión,
-  - reviewers requeridos,
-  - timeline de eventos.
-- Acciones de comité:
-  - aprobar a scoring,
-  - solicitar reformulación,
-  - rechazar.
+La hoja referencial organiza la mirada ejecutiva alrededor de:
 
-### Next.js proxy
+- Indicadores clave del portafolio.
+- Score promedio.
+- Casos de alta prioridad.
+- VAN total priorizado.
+- Top 5 casos prioritarios.
+- Distribución por prioridad.
+- Análisis comparativo contra benchmark.
+- VAN por caso.
+- Métricas financieras clave.
 
-Se agregan rutas internas para evitar CORS y mantener el navegador apuntando al mismo origen:
+## Implementación Sprint 08
 
-```text
-GET   /api/demands/backlog      -> GET   FastAPI /demands/backlog
-PATCH /api/demands/status       -> PATCH FastAPI /demands/{demand_id}/status
-```
+La UI queda reorganizada como un dashboard ejecutivo con:
 
-### Backend utilizado
+1. **Header ejecutivo**
+   - Título de cockpit.
+   - Estado de conexión.
+   - Sincronización de backlog.
 
-El Sprint 08 reutiliza los endpoints del Sprint 07:
+2. **Franja superior de KPIs**
+   - Score promedio estimado.
+   - Alta prioridad.
+   - VAN total como placeholder explícito para Sprint 09.
+   - Total de solicitudes.
+   - Solicitudes en revisión.
+   - Eventos trazables.
 
-```text
-POST  /demands/validate-and-create
-GET   /demands/backlog
-GET   /demands/{demand_id}
-PATCH /demands/{demand_id}/status
-```
+3. **Portafolio gobernado**
+   - Tabla Top casos prioritarios.
+   - Área.
+   - Caso de negocio.
+   - Score estimado.
+   - Prioridad.
+   - Estado.
+   - Decisión.
 
-## Prueba manual esperada
+4. **Analítica ejecutiva**
+   - Distribución por prioridad.
+   - Score vs benchmark 4.0.
+   - Potencial económico preparado para VAN.
+   - Brechas por política, arquitectura y FinOps.
 
-1. Actualizar `main` o la rama del sprint.
-2. Levantar backend:
+5. **Operación del comité**
+   - Nueva solicitud.
+   - Detalle por `demand_id`.
+   - Ruta de comité.
+   - Roles revisores.
+   - Acciones: aprobar a scoring, solicitar reformulación y rechazar.
+   - Timeline de eventos auditables.
+
+## Proxies Next.js
+
+Se mantienen los proxies internos para evitar fricción de CORS en Cloud Shell:
+
+- `POST /api/intake/validate` → `POST /demands/validate-and-create`
+- `GET /api/demands/backlog` → `GET /demands/backlog`
+- `PATCH /api/demands/status` → `PATCH /demands/{demand_id}/status`
+
+## Decisiones de diseño
+
+- El dashboard prioriza lectura ejecutiva antes que densidad técnica.
+- VAN, TIR, ROI y payback se muestran como zona preparada, sin inventar valores aún.
+- El score mostrado en Sprint 08 es derivado de readiness/brechas; el scoring formal se implementará en Sprint 09.
+- La tabla Top casos usa el backlog persistente como fuente viva.
+- Cada acción de comité actualiza el estado y agrega trazabilidad mediante eventos.
+
+## Validación manual esperada
+
+1. Levantar backend:
 
 ```bash
-cd ~/portafoliodatagob
 make dev-api
 ```
 
-3. Levantar frontend:
+2. Levantar frontend:
 
 ```bash
-cd ~/portafoliodatagob/apps/web
+cd apps/web
 npm run dev -- -H 0.0.0.0 -p 3000
 ```
 
-4. Abrir Web Preview puerto 3000.
-5. Presionar **Validar y guardar solicitud**.
-6. Confirmar que aparece un registro `DEM-...` en la tabla de backlog.
-7. Seleccionar la solicitud y ejecutar una acción de comité.
+3. Abrir Web Preview en el puerto 3000.
+4. Crear una solicitud con **Validar y guardar solicitud**.
+5. Confirmar que aparece en la tabla Top casos prioritarios.
+6. Seleccionar la solicitud.
+7. Ejecutar una acción de comité.
 8. Confirmar que el timeline agrega un nuevo evento.
-
-## Resultado esperado
-
-ATLAS DataGob permite operar el ciclo mínimo de gobierno de demanda:
-
-```text
-Nueva solicitud
-→ Validación multiagente
-→ Registro en backlog
-→ Revisión por comité / Arquitecto de Datos
-→ Cambio de estado
-→ Evento auditable
-```
 
 ## Próximo sprint sugerido
 
-Sprint 09 · Detalle de demanda y scoring operativo:
+**Sprint 09 · Scoring operativo y modelo financiero**
 
-- cálculo de scoring desde backlog,
-- filtros por estado/dominio/patrón,
-- detalle expandido de brechas,
-- estados controlados por catálogo,
-- preparación para persistencia gestionada en GCP.
+- Score formal configurable.
+- Prioridad Alta/Media/Baja basada en reglas.
+- VAN, TIR, ROI y payback.
+- Ranking por valor y riesgo.
+- Filtros ejecutivos por dominio, estado, prioridad y patrón arquitectónico.
