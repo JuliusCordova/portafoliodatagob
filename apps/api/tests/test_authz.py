@@ -67,12 +67,22 @@ class AuthzModelTest(unittest.TestCase):
 
     def test_route_permission_mapping_covers_core_paths(self) -> None:
         self.assertIsNone(permission_for_request("GET", "/health"))
+        self.assertIsNone(permission_for_request("OPTIONS", "/demands/backlog"))
         self.assertEqual("demand:create", permission_for_request("POST", "/demands/validate-and-create"))
         self.assertEqual("demand:read", permission_for_request("GET", "/demands/DEM-001"))
         self.assertEqual("demand:update", permission_for_request("PATCH", "/demands/DEM-001"))
         self.assertEqual("demand:status:update", permission_for_request("PATCH", "/demands/DEM-001/status"))
         self.assertEqual("demand:score", permission_for_request("POST", "/demands/DEM-001/score"))
         self.assertEqual("demo:reset", permission_for_request("POST", "/demo/reset"))
+
+    def test_authorize_request_keeps_public_routes_public_in_header_mode(self) -> None:
+        with patch.dict(os.environ, {"ATLAS_AUTH_MODE": AUTH_MODE_HEADER}, clear=True):
+            context = authorize_request("GET", "/health", {})
+            preflight_context = authorize_request("OPTIONS", "/demands/backlog", {})
+
+        self.assertEqual("public", context.user)
+        self.assertFalse(context.authenticated)
+        self.assertEqual("public", preflight_context.user)
 
     def test_authorize_request_enforces_header_roles(self) -> None:
         with patch.dict(os.environ, {"ATLAS_AUTH_MODE": AUTH_MODE_HEADER}, clear=True):
