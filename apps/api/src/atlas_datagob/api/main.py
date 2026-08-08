@@ -20,6 +20,8 @@ from atlas_datagob.services.demand_backlog import (
     create_demand_record,
     get_demand_record,
     list_demand_records,
+    load_demo_seed_records,
+    reset_demo_backlog,
     update_demand_record,
     update_demand_record_scoring,
     update_demand_record_status,
@@ -54,7 +56,7 @@ DATA_ROOT = Path("data")
 DOMAINS_PATH = DATA_ROOT / "synthetic" / "domains" / "domains.json"
 DICTIONARY_PATH = DATA_ROOT / "canonical" / "data_dictionary.json"
 ER_MODEL_PATH = DATA_ROOT / "canonical" / "entity_relationship_model.json"
-API_VERSION = "0.6.1"
+API_VERSION = "0.6.2"
 
 
 def _allowed_origins() -> list[str]:
@@ -181,6 +183,30 @@ if FastAPI:
     def demand_backlog(status: str | None = None) -> dict:
         records = list_demand_records(status=status)
         return {"count": len(records), "demands": records}
+
+    @app.get("/demo/cases")
+    def demo_cases() -> dict:
+        try:
+            records = load_demo_seed_records()
+        except ValueError as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+        return {
+            "count": len(records),
+            "demands": records,
+            "note": "Curated demo records. Runtime backlog is not modified by this endpoint.",
+        }
+
+    @app.post("/demo/reset")
+    def demo_reset() -> dict:
+        try:
+            records = reset_demo_backlog()
+        except ValueError as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+        return {
+            "count": len(records),
+            "demands": records,
+            "message": "Runtime backlog reset from curated demo seed records.",
+        }
 
     @app.get("/demands/{demand_id}")
     def demand_detail(demand_id: str) -> dict:

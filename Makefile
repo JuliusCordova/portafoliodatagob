@@ -1,4 +1,4 @@
-.PHONY: test test-api lint-local validate-contracts smoke-policy dev-api dev-web
+.PHONY: test test-api lint-local validate-contracts smoke-policy seed-demo dev-api dev-web
 
 test: test-api validate-contracts smoke-policy
 
@@ -10,6 +10,9 @@ validate-contracts:
 
 smoke-policy:
 	PYTHONPATH=apps/api/src python scripts/smoke_policy_architecture.py
+
+seed-demo:
+	PYTHONPATH=apps/api/src python scripts/seed_demo_backlog.py
 
 lint-local:
 	python -m compileall apps/api/src apps/api/tests scripts
