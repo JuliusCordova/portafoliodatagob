@@ -23,8 +23,11 @@ from atlas_datagob.services.demand_backlog import (
     update_demand_record_status,
 )
 from atlas_datagob.services.financial_scoring import (
+    DirectFinancialMetrics,
     FinancialAssumptions,
+    GovernedDirectScoringInput,
     GovernedScoringInput,
+    calculate_governed_direct_scoring,
     calculate_governed_scoring,
 )
 from atlas_datagob.services.policy_architecture_validation import (
@@ -102,12 +105,20 @@ if FastAPI:
         technical_feasibility: int = Field(ge=1, le=5)
 
     class DemandFinancialScoringPayload(ScoringPayload):
-        initial_investment_usd: float = Field(ge=0)
-        annual_benefit_usd: float = Field(ge=0)
+        # Data Owner direct financial metrics.
+        roi_percent: float | None = None
+        van_usd: float | None = None
+        tir_percent: float | None = None
+        payback_years: float | None = Field(default=None, ge=0)
+
+        # Optional detailed assumptions for committee/portfolio modelling.
+        initial_investment_usd: float | None = Field(default=None, ge=0)
+        annual_benefit_usd: float | None = Field(default=None, ge=0)
         annual_operating_cost_usd: float = Field(default=0, ge=0)
         time_horizon_years: int = Field(default=3, ge=1, le=10)
         discount_rate: float = Field(default=0.12, ge=0, le=1)
-        actor: str = "Portfolio Owner"
+
+        actor: str = "Data Owner"
         comment: str | None = None
 
     @app.get("/health")
@@ -177,16 +188,40 @@ if FastAPI:
                 governance_risk=payload.governance_risk,
                 technical_feasibility=payload.technical_feasibility,
             )
-            financial_input = FinancialAssumptions(
-                initial_investment_usd=payload.initial_investment_usd,
-                annual_benefit_usd=payload.annual_benefit_usd,
-                annual_operating_cost_usd=payload.annual_operating_cost_usd,
-                time_horizon_years=payload.time_horizon_years,
-                discount_rate=payload.discount_rate,
+            has_direct_metrics = all(
+                value is not None
+                for value in [payload.roi_percent, payload.van_usd, payload.tir_percent, payload.payback_years]
             )
-            scoring_result = calculate_governed_scoring(
-                GovernedScoringInput(scoring=scoring_input, financials=financial_input)
-            )
+            if has_direct_metrics:
+                scoring_result = calculate_governed_direct_scoring(
+                    GovernedDirectScoringInput(
+                        scoring=scoring_input,
+                        financials=DirectFinancialMetrics(
+                            roi_percent=payload.roi_percent or 0,
+                            van_usd=payload.van_usd or 0,
+                            tir_percent=payload.tir_percent or 0,
+                            payback_years=payload.payback_years or 0,
+                        ),
+                    )
+                )
+            else:
+                if payload.initial_investment_usd is None or payload.annual_benefit_usd is None:
+                    raise ValueError(
+                        "Provide either direct Data Owner metrics (roi_percent, van_usd, tir_percent, payback_years) "
+                        "or detailed assumptions (initial_investment_usd, annual_benefit_usd)."
+                    )
+                scoring_result = calculate_governed_scoring(
+                    GovernedScoringInput(
+                        scoring=scoring_input,
+                        financials=FinancialAssumptions(
+                            initial_investment_usd=payload.initial_investment_usd,
+                            annual_benefit_usd=payload.annual_benefit_usd,
+                            annual_operating_cost_usd=payload.annual_operating_cost_usd,
+                            time_horizon_years=payload.time_horizon_years,
+                            discount_rate=payload.discount_rate,
+                        ),
+                    )
+                )
             record = update_demand_record_scoring(
                 demand_id,
                 scoring_result=scoring_result,
