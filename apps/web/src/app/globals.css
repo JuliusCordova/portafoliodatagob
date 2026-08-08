@@ -92,6 +92,34 @@ h3 { margin-bottom: 8px; font-size: 16px; }
 
 .hero-badge strong { display: block; margin-top: 8px; font-size: 18px; }
 
+.status-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 16px;
+  padding: 16px 20px;
+  border-radius: 20px;
+  border: 1px solid var(--line);
+  background: white;
+  box-shadow: var(--shadow);
+}
+
+.status-card strong {
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.status-card span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: right;
+}
+
+.status-api { background: var(--green-soft); border-color: rgba(21, 128, 61, 0.18); }
+.status-error { background: var(--red-soft); border-color: rgba(185, 28, 28, 0.18); }
+.status-demo { background: white; }
+
 .metrics-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -246,5 +274,6 @@ button:hover { filter: brightness(0.95); }
   .shell { padding: 22px 14px; }
   .hero { padding: 24px; }
   .metrics-grid, .gaps-grid { grid-template-columns: 1fr; }
-  .section-title-row { flex-direction: column; }
+  .section-title-row, .status-card { flex-direction: column; }
+  .status-card span { text-align: left; }
 }
