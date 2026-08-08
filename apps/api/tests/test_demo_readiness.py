@@ -33,6 +33,24 @@ class DemoReadinessTest(unittest.TestCase):
             self.assertTrue(all(record["events"][-1]["actor"] == "Demo Operator" for record in persisted))
             self.assertTrue(all(record["demand_id"].startswith("DEM-DEMO-") for record in persisted))
 
+    def test_demo_seed_materializes_as_runtime_backlog_model_records(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            runtime_model_path = Path(directory) / "data" / "runtime" / "demand_backlog.json"
+
+            reset_demo_backlog(path=runtime_model_path, actor="Demo Seed Script")
+            persisted = load_demand_records(runtime_model_path)
+
+            self.assertTrue(runtime_model_path.exists())
+            self.assertGreaterEqual(len(persisted), 10)
+            for record in persisted:
+                self.assertIn("demand_id", record)
+                self.assertIn("status", record)
+                self.assertIn("request", record)
+                self.assertIn("business_inputs", record)
+                self.assertIn("committee_inputs", record)
+                self.assertIn("events", record)
+                self.assertIsInstance(record["events"], list)
+
 
 if __name__ == "__main__":
     unittest.main()
