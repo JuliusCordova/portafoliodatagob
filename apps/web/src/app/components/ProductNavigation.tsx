@@ -35,6 +35,13 @@ const navigationItems: NavigationItem[] = [
     description: "Decisión final, justificación y trazabilidad",
     requiredRoles: ["committee_member", "data_architect", "platform_admin"],
     guardrail: "Requiere rol de comité o arquitectura para decidir"
+  },
+  {
+    href: "/sponsor-review",
+    label: "Sponsor review",
+    description: "Paquete ejecutivo imprimible y evidencia de decisión",
+    requiredRoles: ["executive", "committee_member", "data_architect", "platform_admin"],
+    guardrail: "Requiere rol ejecutivo, comité o arquitectura para revisar paquetes"
   }
 ];
 
