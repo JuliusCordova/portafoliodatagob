@@ -1,9 +1,10 @@
 """Local demand backlog persistence for ATLAS DataGob.
 
 This module intentionally uses a lightweight JSON store for the MVP. It keeps
-requests, validation outputs, committee decisions and lifecycle events in one
-place so the product can demonstrate traceability before moving to a managed
-store such as Firestore, AlloyDB, Cloud SQL or BigQuery.
+requests, validation outputs, committee decisions, scoring results, financial
+metrics and lifecycle events in one place so the product can demonstrate
+traceability before moving to a managed store such as Firestore, AlloyDB, Cloud
+SQL or BigQuery.
 """
 from __future__ import annotations
 
@@ -20,6 +21,7 @@ VALID_DEMAND_STATUSES = {
     "operative_committee_review",
     "reformulation_required",
     "approved_for_scoring",
+    "scored",
     "rejected",
     "mvp_candidate",
     "production_candidate",
@@ -79,6 +81,28 @@ def demand_id_for(now: str) -> str:
     return f"DEM-{date_token}-{uuid4().hex[:8].upper()}"
 
 
+def _event(
+    *,
+    event_type: str,
+    actor: str,
+    from_status: str | None,
+    to_status: str,
+    decision: str | None,
+    comment: str,
+    timestamp: str,
+) -> dict:
+    return {
+        "event_id": f"EVT-{uuid4().hex[:8].upper()}",
+        "timestamp": timestamp,
+        "type": event_type,
+        "actor": actor,
+        "from_status": from_status,
+        "to_status": to_status,
+        "decision": decision,
+        "comment": comment,
+    }
+
+
 def create_demand_record(
     validation_result: dict,
     *,
@@ -110,17 +134,18 @@ def create_demand_record(
         "committee": committee,
         "committee_summary": validation_result.get("committee_summary", ""),
         "agent_trace": validation_result.get("agent_trace", []),
+        "scoring": None,
+        "financials": None,
         "events": [
-            {
-                "event_id": f"EVT-{uuid4().hex[:8].upper()}",
-                "timestamp": now,
-                "type": "demand_created",
-                "actor": actor,
-                "from_status": None,
-                "to_status": status,
-                "decision": decision,
-                "comment": "Solicitud validada y registrada en el backlog de demanda.",
-            }
+            _event(
+                event_type="demand_created",
+                actor=actor,
+                from_status=None,
+                to_status=status,
+                decision=decision,
+                comment="Solicitud validada y registrada en el backlog de demanda.",
+                timestamp=now,
+            )
         ],
     }
 
@@ -172,16 +197,61 @@ def update_demand_record_status(
         record["decision"] = decision or record.get("decision") or status
         record["updated_at"] = now
         record.setdefault("events", []).append(
-            {
-                "event_id": f"EVT-{uuid4().hex[:8].upper()}",
-                "timestamp": now,
-                "type": "status_changed",
-                "actor": actor,
-                "from_status": previous_status,
-                "to_status": status,
-                "decision": record["decision"],
-                "comment": comment or "Actualización de estado registrada.",
-            }
+            _event(
+                event_type="status_changed",
+                actor=actor,
+                from_status=previous_status,
+                to_status=status,
+                decision=record["decision"],
+                comment=comment or "Actualización de estado registrada.",
+                timestamp=now,
+            )
+        )
+        write_demand_records(records, path)
+        return record
+    return None
+
+
+def update_demand_record_scoring(
+    demand_id: str,
+    *,
+    scoring_result: dict,
+    actor: str = "Portfolio Owner",
+    comment: str | None = None,
+    path: str | Path = DEFAULT_BACKLOG_PATH,
+) -> dict | None:
+    """Attach scoring and financial metrics to one demand record with audit trail."""
+
+    records = load_demand_records(path)
+    now = utc_now()
+    for record in records:
+        if record.get("demand_id") != demand_id:
+            continue
+        previous_status = record.get("status")
+        record["scoring"] = {
+            "score": scoring_result["score"],
+            "priority": scoring_result["priority"],
+            "rationale": scoring_result["rationale"],
+            "components": scoring_result["components"],
+            "financial_signal": scoring_result["financial_signal"],
+            "model_version": scoring_result["model_version"],
+            "governance_note": scoring_result["governance_note"],
+        }
+        record["financials"] = scoring_result["financials"]
+        record["status"] = "scored"
+        record["decision"] = f"priority_{str(scoring_result['priority']).lower()}"
+        record["current_stage"] = "portfolio_scoring"
+        record["updated_at"] = now
+        record.setdefault("events", []).append(
+            _event(
+                event_type="scoring_updated",
+                actor=actor,
+                from_status=previous_status,
+                to_status="scored",
+                decision=record["decision"],
+                comment=comment or "Scoring operativo y métricas financieras registrados.",
+                timestamp=now,
+            )
         )
         write_demand_records(records, path)
         return record
