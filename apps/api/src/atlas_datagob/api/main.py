@@ -19,7 +19,16 @@ from atlas_datagob.services.demand_backlog import (
     create_demand_record,
     get_demand_record,
     list_demand_records,
+    update_demand_record_scoring,
     update_demand_record_status,
+)
+from atlas_datagob.services.financial_scoring import (
+    DirectFinancialMetrics,
+    FinancialAssumptions,
+    GovernedDirectScoringInput,
+    GovernedScoringInput,
+    calculate_governed_direct_scoring,
+    calculate_governed_scoring,
 )
 from atlas_datagob.services.policy_architecture_validation import (
     IntakeValidationContext,
@@ -43,7 +52,7 @@ DATA_ROOT = Path("data")
 DOMAINS_PATH = DATA_ROOT / "synthetic" / "domains" / "domains.json"
 DICTIONARY_PATH = DATA_ROOT / "canonical" / "data_dictionary.json"
 ER_MODEL_PATH = DATA_ROOT / "canonical" / "entity_relationship_model.json"
-API_VERSION = "0.5.0"
+API_VERSION = "0.6.0"
 
 
 def _allowed_origins() -> list[str]:
@@ -94,6 +103,40 @@ if FastAPI:
         data_readiness: int = Field(ge=1, le=5)
         governance_risk: int = Field(ge=1, le=5)
         technical_feasibility: int = Field(ge=1, le=5)
+
+    class DemandFinancialScoringPayload(ScoringPayload):
+        # Data Owner direct financial metrics.
+        roi_percent: float | None = None
+        van_usd: float | None = None
+        tir_percent: float | None = None
+        payback_years: float | None = Field(default=None, ge=0)
+
+        # Data Owner business checklist.
+        operational_impact: int | None = Field(default=None, ge=1, le=5)
+        operational_justification: str | None = None
+        strategic_impact: int | None = Field(default=None, ge=1, le=5)
+        strategic_impact_justification: str | None = None
+        strategic_alignment_justification: str | None = None
+
+        # Committee technical/governance checklist.
+        data_readiness_justification: str | None = None
+        technical_feasibility_justification: str | None = None
+        execution_effort: int | None = Field(default=None, ge=1, le=5)
+        execution_effort_justification: str | None = None
+        risk_control: int | None = Field(default=None, ge=1, le=5)
+        risk_control_justification: str | None = None
+        reuse_potential: int | None = Field(default=None, ge=1, le=5)
+        reuse_potential_justification: str | None = None
+
+        # Optional detailed assumptions for committee/portfolio modelling.
+        initial_investment_usd: float | None = Field(default=None, ge=0)
+        annual_benefit_usd: float | None = Field(default=None, ge=0)
+        annual_operating_cost_usd: float = Field(default=0, ge=0)
+        time_horizon_years: int = Field(default=3, ge=1, le=10)
+        discount_rate: float = Field(default=0.12, ge=0, le=1)
+
+        actor: str = "Data Owner"
+        comment: str | None = None
 
     @app.get("/health")
     def health() -> dict:
@@ -150,6 +193,84 @@ if FastAPI:
         if not record:
             raise HTTPException(status_code=404, detail="Demand record not found")
         return {"demand": record}
+
+    @app.post("/demands/{demand_id}/score")
+    def demand_score_update(demand_id: str, payload: DemandFinancialScoringPayload) -> dict:
+        try:
+            scoring_input = ScoringInput(
+                strategic_alignment=payload.strategic_alignment,
+                business_value=payload.business_value,
+                urgency=payload.urgency,
+                data_readiness=payload.data_readiness,
+                governance_risk=payload.governance_risk,
+                technical_feasibility=payload.technical_feasibility,
+            )
+            has_direct_metrics = all(
+                value is not None
+                for value in [payload.roi_percent, payload.van_usd, payload.tir_percent, payload.payback_years]
+            )
+            if has_direct_metrics:
+                scoring_result = calculate_governed_direct_scoring(
+                    GovernedDirectScoringInput(
+                        scoring=scoring_input,
+                        financials=DirectFinancialMetrics(
+                            roi_percent=payload.roi_percent or 0,
+                            van_usd=payload.van_usd or 0,
+                            tir_percent=payload.tir_percent or 0,
+                            payback_years=payload.payback_years or 0,
+                        ),
+                    )
+                )
+            else:
+                if payload.initial_investment_usd is None or payload.annual_benefit_usd is None:
+                    raise ValueError(
+                        "Provide either direct Data Owner metrics (roi_percent, van_usd, tir_percent, payback_years) "
+                        "or detailed assumptions (initial_investment_usd, annual_benefit_usd)."
+                    )
+                scoring_result = calculate_governed_scoring(
+                    GovernedScoringInput(
+                        scoring=scoring_input,
+                        financials=FinancialAssumptions(
+                            initial_investment_usd=payload.initial_investment_usd,
+                            annual_benefit_usd=payload.annual_benefit_usd,
+                            annual_operating_cost_usd=payload.annual_operating_cost_usd,
+                            time_horizon_years=payload.time_horizon_years,
+                            discount_rate=payload.discount_rate,
+                        ),
+                    )
+                )
+            scoring_result["business_inputs"] = {
+                "operational_impact": payload.operational_impact,
+                "operational_justification": payload.operational_justification,
+                "strategic_impact": payload.strategic_impact,
+                "strategic_impact_justification": payload.strategic_impact_justification,
+                "strategic_alignment": payload.strategic_alignment,
+                "strategic_alignment_justification": payload.strategic_alignment_justification,
+                "business_value": payload.business_value,
+            }
+            scoring_result["committee_inputs"] = {
+                "data_readiness": payload.data_readiness,
+                "data_readiness_justification": payload.data_readiness_justification,
+                "technical_feasibility": payload.technical_feasibility,
+                "technical_feasibility_justification": payload.technical_feasibility_justification,
+                "execution_effort": payload.execution_effort,
+                "execution_effort_justification": payload.execution_effort_justification,
+                "risk_control": payload.risk_control,
+                "risk_control_justification": payload.risk_control_justification,
+                "reuse_potential": payload.reuse_potential,
+                "reuse_potential_justification": payload.reuse_potential_justification,
+            }
+            record = update_demand_record_scoring(
+                demand_id,
+                scoring_result=scoring_result,
+                actor=payload.actor,
+                comment=payload.comment,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if not record:
+            raise HTTPException(status_code=404, detail="Demand record not found")
+        return {"demand": record, "scoring": scoring_result}
 
     @app.get("/policies")
     def policies() -> dict:

@@ -13,11 +13,7 @@ type CommitteeRoute = {
 };
 
 type ValidationResult = {
-  classification: {
-    initiative_type: string;
-    confidence: number;
-    rationale: string;
-  };
+  classification: { initiative_type: string; confidence: number; rationale: string };
   architecture: {
     architecture_pattern: string;
     is_compliant: boolean;
@@ -40,6 +36,32 @@ type DemandEvent = {
   to_status: string;
   decision?: string | null;
   comment: string;
+};
+
+type BusinessInputs = {
+  operationalImpact: number;
+  operationalJustification: string;
+  strategicImpact: number;
+  strategicImpactJustification: string;
+  roiPercent: number;
+  vanUsd: number;
+  tirPercent: number;
+  paybackYears: number;
+  strategicAlignment: number;
+  strategicAlignmentJustification: string;
+};
+
+type CommitteeInputs = {
+  dataReadiness: number;
+  dataReadinessJustification: string;
+  technicalFeasibility: number;
+  technicalFeasibilityJustification: string;
+  executionEffort: number;
+  executionEffortJustification: string;
+  riskControl: number;
+  riskControlJustification: string;
+  reusePotential: number;
+  reusePotentialJustification: string;
 };
 
 type DemandRecord = {
@@ -66,18 +88,28 @@ type DemandRecord = {
   committee_summary: string;
   agent_trace: string[];
   events: DemandEvent[];
+  scoring?: {
+    score: number;
+    priority: string;
+    rationale: string;
+    components: Record<string, number>;
+    financial_signal: string;
+    model_version: string;
+  };
+  financials?: {
+    input_mode: string;
+    van_usd: number;
+    tir_percent?: number | null;
+    roi_percent?: number | null;
+    payback_years?: number | null;
+    financial_score?: number | null;
+  };
+  business_inputs?: Record<string, unknown>;
+  committee_inputs?: Record<string, unknown>;
 };
 
-type PersistedValidationResponse = {
-  demand: DemandRecord;
-  validation: ValidationResult;
-};
-
-type BacklogResponse = {
-  count: number;
-  demands: DemandRecord[];
-};
-
+type PersistedValidationResponse = { demand: DemandRecord; validation: ValidationResult };
+type BacklogResponse = { count: number; demands: DemandRecord[] };
 type RuntimeMode = "demo" | "api" | "error" | "loading";
 type ActiveView = "intake" | "committee" | "executive";
 type PillTone = "neutral" | "ok" | "warn" | "risk" | "dark";
@@ -95,45 +127,61 @@ const defaultResult: ValidationResult = {
     architecture_pattern: "data_engineering",
     is_compliant: false,
     missing_components: ["reconciliation", "semantic_model", "finops"],
-    architecture_gaps: [
-      "Faltan componentes obligatorios del patrón aprobado: reconciliation, semantic_model, finops.",
-      "La arquitectura debe ser validada por el Arquitecto de Datos antes de pasar a scoring."
-    ],
+    architecture_gaps: ["La arquitectura debe ser validada por el Arquitecto de Datos antes de pasar a scoring."],
     human_architecture_review_required: true
   },
-  policy_gaps: [
-    "Definir puntos de reconciliación/cuadratura desde ingesta hasta capa Gold/consumo.",
-    "Asignar Data Owner y Data Steward antes de Comité Operativo."
-  ],
-  finops_gaps: [
-    "Definir owner de costo, presupuesto, alertas y estrategia de consumo.",
-    "Estimar volumen, frecuencia de consulta y estrategia de particionado/clustering."
-  ],
+  policy_gaps: ["Asignar Data Owner y Data Steward antes de Comité Operativo."],
+  finops_gaps: ["Estimar volumen, frecuencia de consulta y estrategia de particionado/clustering."],
   operative_committee: {
     route: "operative_committee_architect_review",
     required_reviewers: ["Data Architect", "Data Owner", "Data Steward"],
     suggested_decision: "architect_review",
     data_architect_final_validation_required: true
   },
-  committee_summary:
-    "La solicitud fue estructurada por el intake multiagente. Presenta brechas de arquitectura, gobierno y FinOps que deben ser revisadas en Comité Operativo con validación final del Arquitecto de Datos."
+  committee_summary: "La solicitud requiere revisión de comité con validación final del Arquitecto de Datos."
+};
+
+const defaultBusinessInputs: BusinessInputs = {
+  operationalImpact: 4,
+  operationalJustification: "Mejora procesos críticos. Ej. optimización de rutas, stock, pedidos o cobertura.",
+  strategicImpact: 4,
+  strategicImpactJustification: "Alineado a prioridades estratégicas. Ej. crecimiento, cobertura, rentabilidad o experiencia cliente.",
+  roiPercent: 80,
+  vanUsd: 25500,
+  tirPercent: 67,
+  paybackYears: 1.5,
+  strategicAlignment: 5,
+  strategicAlignmentJustification: "Alineamiento crítico; habilita prioridad estratégica de negocio o gobierno."
+};
+
+const defaultCommitteeInputs: CommitteeInputs = {
+  dataReadiness: 4,
+  dataReadinessJustification: "Datos disponibles, trazables y con calidad razonable.",
+  technicalFeasibility: 4,
+  technicalFeasibilityJustification: "Viabilidad alta; arquitectura y fuentes razonablemente definidas.",
+  executionEffort: 4,
+  executionEffortJustification: "Bajo esfuerzo; ejecución factible en 4 a 6 semanas.",
+  riskControl: 4,
+  riskControlJustification: "Riesgo bajo; controles definidos y responsables claros.",
+  reusePotential: 5,
+  reusePotentialJustification: "Muy alta reutilización. Componente base para muchos casos; plataforma, data product o modelo reusable."
 };
 
 const viewCopy: Record<ActiveView, { eyebrow: string; title: string; copy: string }> = {
   intake: {
-    eyebrow: "Vista 1 · Usuario de negocio",
-    title: "Intake simple de solicitud",
-    copy: "Captura lo mínimo necesario, valida con agentes y envía la demanda al backlog gobernado. Sin ruido de comité ni tablero."
+    eyebrow: "Vista 1 · Usuario de negocio / Data Owner",
+    title: "Intake guiado de solicitud y valor",
+    copy: "El Data Owner registra la demanda y responde un checklist conversacional de impacto, valor económico y alineamiento estratégico."
   },
   committee: {
     eyebrow: "Vista 2 · Comité operativo",
-    title: "Cola de análisis y decisión",
-    copy: "Revisa solicitudes, brechas, ruta de comité, roles requeridos y cambia estado dejando evidencia trazable."
+    title: "Grilla CRUD de demanda y validación de score",
+    copy: "El comité filtra solicitudes, valida lo capturado por el Data Owner, completa criterios técnicos y calcula el score gobernado."
   },
   executive: {
     eyebrow: "Vista 3 · Comité estratégico",
     title: "Tablero ejecutivo de priorización",
-    copy: "Observa el portafolio de demanda: KPIs, Top 5, prioridad, benchmark, brechas agregadas y zona financiera preparada."
+    copy: "Vista agregada de portafolio: score, prioridad, brechas, finanzas y trazabilidad para decisión ejecutiva."
   }
 };
 
@@ -169,9 +217,15 @@ function formatDate(value: string) {
 }
 
 function statusTone(status: string): PillTone {
-  if (status.includes("approved")) return "ok";
-  if (status.includes("rejected")) return "risk";
+  if (status === "scored" || status.includes("approved")) return "ok";
+  if (status.includes("rejected") || status.includes("archived")) return "risk";
   if (status.includes("reformulation") || status.includes("review")) return "warn";
+  return "neutral";
+}
+
+function priorityTone(priority: string): PillTone {
+  if (priority === "Alta") return "risk";
+  if (priority === "Media") return "warn";
   return "neutral";
 }
 
@@ -183,30 +237,46 @@ function readinessFromDemand(demand: DemandRecord) {
   return Math.max(25, 100 - gapCount(demand) * 12);
 }
 
-function scoreFromReadiness(readiness: number) {
-  return Math.max(1, Math.min(5, readiness / 20));
+function fallbackScore(demand: DemandRecord) {
+  return Math.max(1, Math.min(5, readinessFromDemand(demand) / 20));
 }
 
-function priorityFromDemand(demand: DemandRecord): PriorityLabel {
-  if (demand.status.includes("approved")) return "Alta";
-  const score = scoreFromReadiness(readinessFromDemand(demand));
+function scoreOf(demand: DemandRecord) {
+  return demand.scoring?.score ?? fallbackScore(demand);
+}
+
+function priorityOf(demand: DemandRecord): PriorityLabel {
+  if (demand.scoring?.priority === "Alta" || demand.scoring?.priority === "Media" || demand.scoring?.priority === "Baja") {
+    return demand.scoring.priority;
+  }
+  const score = scoreOf(demand);
   if (score >= 4) return "Alta";
   if (score >= 3) return "Media";
   return "Baja";
 }
 
-function priorityTone(priority: PriorityLabel): PillTone {
-  if (priority === "Alta") return "risk";
-  if (priority === "Media") return "warn";
-  return "neutral";
-}
-
-function committeeReviewers(demand: DemandRecord): string[] {
-  return demand.committee.required_reviewers ?? demand.committee.required_review_roles ?? [];
-}
-
 function percentage(value: number, total: number) {
   return total === 0 ? 0 : Math.round((value / total) * 100);
+}
+
+function bucket(value: number, thresholds: [number, number, number, number]) {
+  if (value >= thresholds[0]) return 5;
+  if (value >= thresholds[1]) return 4;
+  if (value >= thresholds[2]) return 3;
+  if (value >= thresholds[3]) return 2;
+  return 1;
+}
+
+function financialScoreFromBusiness(input: BusinessInputs) {
+  const roi = bucket(input.roiPercent, [80, 60, 35, 20]);
+  const van = bucket(input.vanUsd, [50000, 25000, 10000, 1]);
+  const tir = bucket(input.tirPercent, [60, 30, 18, 10]);
+  const payback = input.paybackYears <= 1 ? 5 : input.paybackYears <= 2 ? 4 : input.paybackYears <= 3 ? 3 : input.paybackYears <= 5 ? 2 : 1;
+  return Math.round(((roi + van + tir + payback) / 4) * 100) / 100;
+}
+
+function roundScore(value: number) {
+  return Math.max(1, Math.min(5, Math.round(value)));
 }
 
 function EmptyState({ title, copy }: { title: string; copy: string }) {
@@ -218,6 +288,17 @@ function EmptyState({ title, copy }: { title: string; copy: string }) {
   );
 }
 
+function businessFromDemand(demand: DemandRecord | null, fallback: BusinessInputs): BusinessInputs {
+  if (!demand?.financials) return fallback;
+  return {
+    ...fallback,
+    roiPercent: demand.financials.roi_percent ?? fallback.roiPercent,
+    vanUsd: demand.financials.van_usd ?? fallback.vanUsd,
+    tirPercent: demand.financials.tir_percent ?? fallback.tirPercent,
+    paybackYears: demand.financials.payback_years ?? fallback.paybackYears
+  };
+}
+
 export default function HomePage() {
   const [activeView, setActiveView] = useState<ActiveView>("intake");
   const [title, setTitle] = useState("Validación de calidad de clientes para dashboard ejecutivo");
@@ -225,45 +306,64 @@ export default function HomePage() {
     "Necesitamos integrar datos de clientes desde fuentes operacionales, llevarlos a Bronze, Silver y Gold, crear controles de calidad y publicar un dashboard ejecutivo. Aún no se ha definido cuadratura, modelo semántico ni presupuesto."
   );
   const [targetConsumption, setTargetConsumption] = useState("BI ejecutivo / dashboard");
+  const [businessInputs, setBusinessInputs] = useState<BusinessInputs>(defaultBusinessInputs);
+  const [businessInputsByDemand, setBusinessInputsByDemand] = useState<Record<string, BusinessInputs>>({});
+  const [committeeInputs, setCommitteeInputs] = useState<CommitteeInputs>(defaultCommitteeInputs);
   const [result, setResult] = useState<ValidationResult>(defaultResult);
   const [persistedDemand, setPersistedDemand] = useState<DemandRecord | null>(null);
   const [backlog, setBacklog] = useState<DemandRecord[]>([]);
   const [selectedDemandId, setSelectedDemandId] = useState<string | null>(null);
+  const [areaFilter, setAreaFilter] = useState("Todas");
+  const [domainFilter, setDomainFilter] = useState("Todos");
+  const [statusFilter, setStatusFilter] = useState("Todos");
+  const [priorityFilter, setPriorityFilter] = useState("Todas");
   const [mode, setMode] = useState<RuntimeMode>("demo");
   const [connectionMessage, setConnectionMessage] = useState("Esperando validación del requerimiento.");
   const [backlogMessage, setBacklogMessage] = useState("Backlog pendiente de sincronización.");
   const [backlogLoading, setBacklogLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [scoreLoading, setScoreLoading] = useState(false);
 
   const selectedDemand = useMemo(() => backlog.find((item) => item.demand_id === selectedDemandId) ?? persistedDemand, [backlog, persistedDemand, selectedDemandId]);
+  const selectedBusinessInputs = selectedDemand ? businessInputsByDemand[selectedDemand.demand_id] ?? businessFromDemand(selectedDemand, businessInputs) : businessInputs;
+  const currentFinancialScore = financialScoreFromBusiness(selectedBusinessInputs);
+
+  const areas = useMemo(() => ["Todas", ...Array.from(new Set(backlog.map((item) => item.request.requester_area || "Sin área")))], [backlog]);
+  const domains = useMemo(() => ["Todos", ...Array.from(new Set(backlog.map((item) => item.request.domain_hint || "Sin dominio")))], [backlog]);
+  const statuses = useMemo(() => ["Todos", ...Array.from(new Set(backlog.map((item) => item.status)))], [backlog]);
+
+  const filteredBacklog = useMemo(() => {
+    return backlog.filter((item) => {
+      const area = item.request.requester_area || "Sin área";
+      const domain = item.request.domain_hint || "Sin dominio";
+      const priority = priorityOf(item);
+      return (
+        (areaFilter === "Todas" || area === areaFilter) &&
+        (domainFilter === "Todos" || domain === domainFilter) &&
+        (statusFilter === "Todos" || item.status === statusFilter) &&
+        (priorityFilter === "Todas" || priority === priorityFilter)
+      );
+    });
+  }, [backlog, areaFilter, domainFilter, statusFilter, priorityFilter]);
 
   const metrics = useMemo(() => {
     const total = backlog.length;
-    const scores = backlog.map((item) => scoreFromReadiness(readinessFromDemand(item)));
+    const scores = backlog.map(scoreOf);
     const averageScore = scores.length ? scores.reduce((sum, score) => sum + score, 0) / scores.length : 0;
-    const high = backlog.filter((item) => priorityFromDemand(item) === "Alta").length;
-    const medium = backlog.filter((item) => priorityFromDemand(item) === "Media").length;
-    const low = backlog.filter((item) => priorityFromDemand(item) === "Baja").length;
+    const high = backlog.filter((item) => priorityOf(item) === "Alta").length;
+    const medium = backlog.filter((item) => priorityOf(item) === "Media").length;
+    const low = backlog.filter((item) => priorityOf(item) === "Baja").length;
     const review = backlog.filter((item) => item.status.includes("review")).length;
-    const approved = backlog.filter((item) => item.status.includes("approved")).length;
+    const scored = backlog.filter((item) => item.status === "scored").length;
     const events = backlog.reduce((sum, item) => sum + item.events.length, 0);
     const policyGaps = backlog.reduce((sum, item) => sum + item.policy_gaps.length, 0);
     const architectureGaps = backlog.reduce((sum, item) => sum + item.architecture_gaps.length, 0);
     const finopsGaps = backlog.reduce((sum, item) => sum + item.finops_gaps.length, 0);
-
-    return { total, averageScore, high, medium, low, review, approved, events, policyGaps, architectureGaps, finopsGaps };
+    const vanTotal = backlog.reduce((sum, item) => sum + (item.financials?.van_usd ?? 0), 0);
+    return { total, averageScore, high, medium, low, review, scored, events, policyGaps, architectureGaps, finopsGaps, vanTotal };
   }, [backlog]);
 
-  const topCases = useMemo(() => {
-    return [...backlog]
-      .sort((left, right) => scoreFromReadiness(readinessFromDemand(right)) - scoreFromReadiness(readinessFromDemand(left)))
-      .slice(0, 5);
-  }, [backlog]);
-
-  const intakeReadiness = useMemo(() => {
-    const gaps = result.policy_gaps.length + result.finops_gaps.length + result.architecture.architecture_gaps.length;
-    return Math.max(25, 100 - gaps * 12);
-  }, [result]);
+  const topCases = useMemo(() => [...backlog].sort((left, right) => scoreOf(right) - scoreOf(left)).slice(0, 5), [backlog]);
 
   async function loadBacklog(highlightDemandId?: string) {
     try {
@@ -274,12 +374,8 @@ export default function HomePage() {
       const payload = JSON.parse(responseText) as BacklogResponse;
       setBacklog(payload.demands);
       setBacklogMessage(`Backlog sincronizado: ${payload.count} solicitudes registradas.`);
-
-      if (highlightDemandId) {
-        setSelectedDemandId(highlightDemandId);
-      } else if (!selectedDemandId && payload.demands.length) {
-        setSelectedDemandId(payload.demands[0].demand_id);
-      }
+      if (highlightDemandId) setSelectedDemandId(highlightDemandId);
+      else if (!selectedDemandId && payload.demands.length) setSelectedDemandId(payload.demands[0].demand_id);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Error desconocido al sincronizar backlog.";
       setBacklogMessage(`No se pudo sincronizar backlog: ${message}`);
@@ -300,14 +396,7 @@ export default function HomePage() {
       const response = await fetch("/api/intake/validate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title,
-          description,
-          requester_area: "Negocio",
-          requester_role: "Domain Owner",
-          domain_hint: "Clientes",
-          target_consumption: targetConsumption
-        })
+        body: JSON.stringify({ title, description, requester_area: "Negocio", requester_role: "Data Owner", domain_hint: "Clientes", target_consumption: targetConsumption })
       });
       const responseText = await response.text();
       if (!response.ok) throw new Error(`Proxy/API validation failed with HTTP ${response.status}: ${responseText}`);
@@ -316,7 +405,8 @@ export default function HomePage() {
       setResult(payload.validation);
       setPersistedDemand(payload.demand);
       setSelectedDemandId(payload.demand.demand_id);
-      setConnectionMessage(`Solicitud ${payload.demand.demand_id} enviada al Comité Operativo.`);
+      setBusinessInputsByDemand((items) => ({ ...items, [payload.demand.demand_id]: businessInputs }));
+      setConnectionMessage(`Solicitud ${payload.demand.demand_id} enviada al Comité Operativo con checklist de valor.`);
       await loadBacklog(payload.demand.demand_id);
       setActiveView("committee");
     } catch (error) {
@@ -329,7 +419,6 @@ export default function HomePage() {
 
   async function updateDemandStatus(status: string, decision: string, comment: string) {
     if (!selectedDemand) return;
-
     try {
       setActionLoading(true);
       const response = await fetch("/api/demands/status", {
@@ -352,265 +441,164 @@ export default function HomePage() {
     }
   }
 
+  async function calculateGovernedScore() {
+    if (!selectedDemand) return;
+    const business = selectedBusinessInputs;
+    const financialScore = financialScoreFromBusiness(business);
+    const businessValue = roundScore((business.operationalImpact + business.strategicImpact + financialScore) / 3);
+    const technicalFeasibility = roundScore((committeeInputs.technicalFeasibility + committeeInputs.executionEffort + committeeInputs.reusePotential) / 3);
+
+    try {
+      setScoreLoading(true);
+      const response = await fetch("/api/demands/score", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          demand_id: selectedDemand.demand_id,
+          strategic_alignment: business.strategicAlignment,
+          business_value: businessValue,
+          urgency: business.strategicImpact,
+          data_readiness: committeeInputs.dataReadiness,
+          governance_risk: 6 - committeeInputs.riskControl,
+          technical_feasibility: technicalFeasibility,
+          roi_percent: business.roiPercent,
+          van_usd: business.vanUsd,
+          tir_percent: business.tirPercent,
+          payback_years: business.paybackYears,
+          operational_impact: business.operationalImpact,
+          operational_justification: business.operationalJustification,
+          strategic_impact: business.strategicImpact,
+          strategic_impact_justification: business.strategicImpactJustification,
+          strategic_alignment_justification: business.strategicAlignmentJustification,
+          data_readiness_justification: committeeInputs.dataReadinessJustification,
+          technical_feasibility_justification: committeeInputs.technicalFeasibilityJustification,
+          execution_effort: committeeInputs.executionEffort,
+          execution_effort_justification: committeeInputs.executionEffortJustification,
+          risk_control: committeeInputs.riskControl,
+          risk_control_justification: committeeInputs.riskControlJustification,
+          reuse_potential: committeeInputs.reusePotential,
+          reuse_potential_justification: committeeInputs.reusePotentialJustification,
+          actor: "Data Owner + Comité Operativo",
+          comment: "Comité validó el checklist de valor del Data Owner y completó criterios técnicos/gobierno."
+        })
+      });
+      const responseText = await response.text();
+      if (!response.ok) throw new Error(`Scoring failed with HTTP ${response.status}: ${responseText}`);
+      const payload = JSON.parse(responseText) as { demand: DemandRecord };
+      setPersistedDemand(payload.demand);
+      setSelectedDemandId(payload.demand.demand_id);
+      setBacklog((items) => items.map((item) => (item.demand_id === payload.demand.demand_id ? payload.demand : item)));
+      setBacklogMessage(`Score actualizado: ${payload.demand.demand_id} → ${payload.demand.scoring?.priority ?? "prioridad calculada"}.`);
+      setActiveView("executive");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Error desconocido al calcular scoring.";
+      setBacklogMessage(`No se pudo calcular el score: ${message}`);
+    } finally {
+      setScoreLoading(false);
+    }
+  }
+
   return (
     <main className="app-shell">
       <section className="app-hero">
         <div>
-          <p className="eyebrow">ATLAS DataGob · Sprint 08</p>
+          <p className="eyebrow">ATLAS DataGob · Sprint 09</p>
           <h1>{viewCopy[activeView].title}</h1>
           <p className="hero-copy">{viewCopy[activeView].copy}</p>
         </div>
         <aside className="hero-panel">
           <span>Modo</span>
           <strong>{mode === "api" ? "API conectada" : mode === "loading" ? "Procesando" : mode === "error" ? "Error" : "Demo local"}</strong>
-          <button className="ghost-button" onClick={() => void loadBacklog()}>{backlogLoading ? "Actualizando..." : "Actualizar backlog"}</button>
+          <button className="secondary-button" onClick={() => void loadBacklog()}>{backlogLoading ? "Actualizando..." : "Actualizar backlog"}</button>
         </aside>
       </section>
 
-      <nav className="experience-nav" aria-label="Navegación por experiencia">
-        <button className={activeView === "intake" ? "active" : ""} onClick={() => setActiveView("intake")}>1 · Intake negocio</button>
-        <button className={activeView === "committee" ? "active" : ""} onClick={() => setActiveView("committee")}>2 · Comité operativo</button>
-        <button className={activeView === "executive" ? "active" : ""} onClick={() => setActiveView("executive")}>3 · Tablero ejecutivo</button>
+      <nav className="view-tabs" aria-label="Vistas de gobierno de demanda">
+        <button className={activeView === "intake" ? "tab-active" : ""} onClick={() => setActiveView("intake")}>1 · Intake negocio</button>
+        <button className={activeView === "committee" ? "tab-active" : ""} onClick={() => setActiveView("committee")}>2 · Comité operativo</button>
+        <button className={activeView === "executive" ? "tab-active" : ""} onClick={() => setActiveView("executive")}>3 · Tablero ejecutivo</button>
       </nav>
 
-      <section className={`status-strip status-${mode}`}>
-        <strong>Estado</strong>
-        <span>{connectionMessage}</span>
-      </section>
-      <section className="status-strip status-api">
-        <strong>Backlog</strong>
-        <span>{backlogMessage}</span>
-      </section>
+      <section className={`status-card status-${mode}`}><strong>Estado de conexión</strong><span>{connectionMessage}</span></section>
+      <section className="status-card status-api"><strong>Backlog persistente</strong><span>{backlogMessage}</span></section>
 
       {activeView === "intake" ? (
-        <section className="view-grid intake-view">
-          <article className="card focus-card">
-            <div className="section-header">
-              <div>
-                <p className="eyebrow small">Solicitud de negocio</p>
-                <h2>Cuéntanos qué necesitas</h2>
-              </div>
-              <Pill>Intake agent</Pill>
+        <section className="single-view">
+          <article className="card">
+            <div className="section-title-row"><div><p className="eyebrow small">Paso 1</p><h2>Nueva solicitud</h2></div><Pill tone="neutral">Usuario / Data Owner</Pill></div>
+            <div className="form-grid two-columns">
+              <label>Título del requerimiento<input value={title} onChange={(event) => setTitle(event.target.value)} /></label>
+              <label>Consumo esperado<select value={targetConsumption} onChange={(event) => setTargetConsumption(event.target.value)}><option>BI ejecutivo / dashboard</option><option>Machine Learning</option><option>GenAI / RAG / agente</option><option>Streaming / tiempo real</option></select></label>
             </div>
-            <label>
-              Título del requerimiento
-              <input value={title} onChange={(event) => setTitle(event.target.value)} />
-            </label>
-            <label>
-              Descripción
-              <textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={8} />
-            </label>
-            <label>
-              Consumo esperado
-              <select value={targetConsumption} onChange={(event) => setTargetConsumption(event.target.value)}>
-                <option>BI ejecutivo / dashboard</option>
-                <option>Machine Learning</option>
-                <option>GenAI / RAG / agente</option>
-                <option>Streaming / tiempo real</option>
-              </select>
-            </label>
-            <button onClick={validateRequest}>{mode === "loading" ? "Validando..." : "Validar y enviar a comité"}</button>
+            <label>Descripción<textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={5} /></label>
           </article>
 
-          <aside className="card guidance-card">
-            <p className="eyebrow small">Qué sucede después</p>
-            <h2>Ruta clara, sin saturar al usuario</h2>
-            <div className="workflow-steps">
-              <div><span>1</span><strong>Registro</strong><p>Negocio ingresa la necesidad con lenguaje simple.</p></div>
-              <div><span>2</span><strong>Validación agéntica</strong><p>ATLAS clasifica, revisa políticas, arquitectura y FinOps.</p></div>
-              <div><span>3</span><strong>Comité operativo</strong><p>La solicitud pasa a revisión con evidencia trazable.</p></div>
+          <article className="card">
+            <div className="section-title-row"><div><p className="eyebrow small">Checklist conversacional</p><h2>Valor de negocio y supuestos económicos</h2><p className="muted-copy">Lo completa el Data Owner. El comité validará estos datos antes de calcular el score.</p></div><Pill tone="dark">Score financiero {currentFinancialScore.toFixed(2)}</Pill></div>
+            <div className="checklist-grid">
+              <label>Impacto operativo<select value={businessInputs.operationalImpact} onChange={(e) => setBusinessInputs({ ...businessInputs, operationalImpact: Number(e.target.value) })}><option value={5}>5 · Ventaja competitiva / transformación</option><option value={4}>4 · Mejora procesos críticos</option><option value={3}>3 · Mejora decisiones relevantes</option><option value={2}>2 · Mejora local o parcial</option><option value={1}>1 · Bajo impacto</option></select><textarea value={businessInputs.operationalJustification} onChange={(e) => setBusinessInputs({ ...businessInputs, operationalJustification: e.target.value })} rows={3} /></label>
+              <label>Impacto estratégico<select value={businessInputs.strategicImpact} onChange={(e) => setBusinessInputs({ ...businessInputs, strategicImpact: Number(e.target.value) })}><option value={5}>5 · Crítico para la estrategia</option><option value={4}>4 · Alineado a prioridades estratégicas</option><option value={3}>3 · Mejora decisiones importantes</option><option value={2}>2 · Contribución táctica</option><option value={1}>1 · Bajo impacto estratégico</option></select><textarea value={businessInputs.strategicImpactJustification} onChange={(e) => setBusinessInputs({ ...businessInputs, strategicImpactJustification: e.target.value })} rows={3} /></label>
+              <label>ROI esperado (%)<input type="number" value={businessInputs.roiPercent} onChange={(e) => setBusinessInputs({ ...businessInputs, roiPercent: Number(e.target.value) })} /></label>
+              <label>VAN esperado ($)<input type="number" value={businessInputs.vanUsd} onChange={(e) => setBusinessInputs({ ...businessInputs, vanUsd: Number(e.target.value) })} /></label>
+              <label>TIR esperada (%)<input type="number" value={businessInputs.tirPercent} onChange={(e) => setBusinessInputs({ ...businessInputs, tirPercent: Number(e.target.value) })} /></label>
+              <label>Payback esperado (años)<input type="number" step="0.1" value={businessInputs.paybackYears} onChange={(e) => setBusinessInputs({ ...businessInputs, paybackYears: Number(e.target.value) })} /></label>
+              <label className="wide-field">Alineamiento estratégico<select value={businessInputs.strategicAlignment} onChange={(e) => setBusinessInputs({ ...businessInputs, strategicAlignment: Number(e.target.value) })}><option value={5}>5 · Alineamiento crítico</option><option value={4}>4 · Alineamiento alto</option><option value={3}>3 · Alineamiento medio</option><option value={2}>2 · Alineamiento bajo</option><option value={1}>1 · No alineado</option></select><textarea value={businessInputs.strategicAlignmentJustification} onChange={(e) => setBusinessInputs({ ...businessInputs, strategicAlignmentJustification: e.target.value })} rows={3} /></label>
             </div>
-            {persistedDemand ? (
-              <div className="success-panel">
-                <strong>{persistedDemand.demand_id}</strong>
-                <p>Solicitud enviada al Comité Operativo.</p>
-              </div>
-            ) : (
-              <div className="mini-metrics">
-                <KpiCard label="Readiness estimado" value={`${intakeReadiness}%`} helper="prevalidación" />
-                <KpiCard label="Patrón inicial" value={result.architecture.architecture_pattern} helper="arquitectura" />
-              </div>
-            )}
-          </aside>
+            <button onClick={validateRequest}>Validar y enviar al Comité Operativo</button>
+          </article>
         </section>
       ) : null}
 
       {activeView === "committee" ? (
-        <section className="view-grid committee-view">
-          <article className="card queue-card">
-            <div className="section-header">
-              <div>
-                <p className="eyebrow small">Cola operativa</p>
-                <h2>Solicitudes para revisión</h2>
-              </div>
-              <Pill tone="warn">{metrics.review} en revisión</Pill>
+        <section className="single-view">
+          <article className="card">
+            <div className="section-title-row"><div><p className="eyebrow small">CRUD de demanda</p><h2>Grilla de solicitudes</h2></div><Pill tone="neutral">{filteredBacklog.length} visibles / {backlog.length} total</Pill></div>
+            <div className="form-grid four-columns">
+              <label>Área<select value={areaFilter} onChange={(e) => setAreaFilter(e.target.value)}>{areas.map((area) => <option key={area}>{area}</option>)}</select></label>
+              <label>Dominio<select value={domainFilter} onChange={(e) => setDomainFilter(e.target.value)}>{domains.map((domain) => <option key={domain}>{domain}</option>)}</select></label>
+              <label>Estado<select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>{statuses.map((status) => <option key={status}>{status}</option>)}</select></label>
+              <label>Prioridad<select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)}><option>Todas</option><option>Alta</option><option>Media</option><option>Baja</option></select></label>
             </div>
-            {backlog.length ? (
-              <div className="queue-list">
-                {backlog.map((demand) => {
-                  const score = scoreFromReadiness(readinessFromDemand(demand));
-                  const priority = priorityFromDemand(demand);
-                  return (
-                    <button key={demand.demand_id} className={`queue-item ${selectedDemand?.demand_id === demand.demand_id ? "selected" : ""}`} onClick={() => setSelectedDemandId(demand.demand_id)}>
-                      <span>{demand.demand_id}</span>
-                      <strong>{demand.request.title}</strong>
-                      <small>{demand.request.requester_area} · {compact(demand.architecture.architecture_pattern, 30)}</small>
-                      <div>
-                        <Pill tone={priorityTone(priority)}>{priority}</Pill>
-                        <Pill tone={statusTone(demand.status)}>{compact(demand.status, 32)}</Pill>
-                        <b>{score.toFixed(2)}/5</b>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            ) : (
-              <EmptyState title="No hay solicitudes todavía" copy="Registra una solicitud desde Intake negocio para alimentar la cola del comité." />
-            )}
+            {filteredBacklog.length ? <div className="table-wrap"><table><thead><tr><th>ID</th><th>Área</th><th>Dominio</th><th>Caso</th><th>Estado</th><th>Prioridad</th><th>Score</th></tr></thead><tbody>{filteredBacklog.map((demand) => <tr key={demand.demand_id} className={selectedDemand?.demand_id === demand.demand_id ? "selected-row" : ""} onClick={() => setSelectedDemandId(demand.demand_id)}><td>{demand.demand_id}</td><td>{demand.request.requester_area}</td><td>{demand.request.domain_hint ?? "Sin dominio"}</td><td><strong>{compact(demand.request.title, 54)}</strong></td><td><Pill tone={statusTone(demand.status)}>{labelize(demand.status)}</Pill></td><td><Pill tone={priorityTone(priorityOf(demand))}>{priorityOf(demand)}</Pill></td><td>{scoreOf(demand).toFixed(2)}</td></tr>)}</tbody></table></div> : <EmptyState title="Sin resultados" copy="Ajusta los filtros o crea una nueva solicitud desde Intake." />}
           </article>
 
-          <article className="card detail-card">
+          <article className="card">
             {selectedDemand ? (
               <>
-                <div className="section-header">
-                  <div>
-                    <p className="eyebrow small">Detalle gobernado</p>
-                    <h2>{selectedDemand.demand_id}</h2>
-                  </div>
-                  <Pill tone={statusTone(selectedDemand.status)}>{compact(selectedDemand.status, 32)}</Pill>
-                </div>
+                <div className="section-title-row"><div><p className="eyebrow small">Validación del comité</p><h2>{selectedDemand.demand_id}</h2><p className="muted-copy">El comité valida lo capturado por el Data Owner y completa el bloque técnico/gobierno.</p></div><Pill tone={statusTone(selectedDemand.status)}>{labelize(selectedDemand.status)}</Pill></div>
                 <div className="detail-grid">
-                  <div><span>Caso</span><strong>{selectedDemand.request.title}</strong></div>
-                  <div><span>Área</span><strong>{selectedDemand.request.requester_area}</strong></div>
-                  <div><span>Consumo</span><strong>{selectedDemand.request.target_consumption ?? "No definido"}</strong></div>
-                  <div><span>Patrón</span><strong>{selectedDemand.architecture.architecture_pattern}</strong></div>
-                  <div><span>Brechas</span><strong>{gapCount(selectedDemand)}</strong></div>
-                  <div><span>Decisión</span><strong>{compact(selectedDemand.decision, 42)}</strong></div>
+                  <div><span>Caso</span><strong>{selectedDemand.request.title}</strong></div><div><span>Dominio</span><strong>{selectedDemand.request.domain_hint ?? "Sin dominio"}</strong></div><div><span>Área</span><strong>{selectedDemand.request.requester_area}</strong></div><div><span>Brechas</span><strong>{gapCount(selectedDemand)}</strong></div>
                 </div>
-                <div className="reviewer-row">
-                  {committeeReviewers(selectedDemand).map((reviewer) => <Pill key={reviewer}>{reviewer}</Pill>)}
-                </div>
-                <p className="muted-copy">{selectedDemand.committee_summary}</p>
-                <div className="actions-row">
-                  <button className="ok-action" disabled={actionLoading} onClick={() => void updateDemandStatus("approved_for_scoring", "approved_for_scoring", "Comité Operativo aprueba el pase a scoring.")}>Aprobar a scoring</button>
-                  <button className="neutral-action" disabled={actionLoading} onClick={() => void updateDemandStatus("reformulation_required", "reformulation_required", "Comité solicita reformulación antes de continuar.")}>Reformular</button>
-                  <button className="risk-action" disabled={actionLoading} onClick={() => void updateDemandStatus("rejected", "rejected", "Comité rechaza la solicitud por brechas críticas.")}>Rechazar</button>
-                </div>
-                <div className="timeline">
-                  <h3>Timeline de trazabilidad</h3>
-                  {selectedDemand.events.map((event) => (
-                    <div className="timeline-item" key={event.event_id ?? `${event.timestamp}-${event.type}`}>
-                      <span>{formatDate(event.timestamp)}</span>
-                      <strong>{labelize(event.type)} · {event.actor}</strong>
-                      <p>{event.comment}</p>
-                      <small>{labelize(event.from_status)} → {labelize(event.to_status)}</small>
-                    </div>
-                  ))}
-                </div>
+                <section className="checklist-panel">
+                  <div className="section-title-row"><h3>Datos del Data Owner a validar</h3><Pill tone="dark">Score financiero {currentFinancialScore.toFixed(2)}</Pill></div>
+                  <div className="detail-grid"><div><span>Impacto operativo</span><strong>{selectedBusinessInputs.operationalImpact.toFixed(2)}</strong></div><div><span>Impacto estratégico</span><strong>{selectedBusinessInputs.strategicImpact.toFixed(2)}</strong></div><div><span>ROI</span><strong>{selectedBusinessInputs.roiPercent.toFixed(1)}%</strong></div><div><span>VAN</span><strong>${selectedBusinessInputs.vanUsd.toLocaleString("en-US")}</strong></div><div><span>TIR</span><strong>{selectedBusinessInputs.tirPercent.toFixed(1)}%</strong></div><div><span>Payback</span><strong>{selectedBusinessInputs.paybackYears.toFixed(1)} años</strong></div><div><span>Alineamiento</span><strong>{selectedBusinessInputs.strategicAlignment.toFixed(2)}</strong></div></div>
+                </section>
+                <section className="checklist-panel">
+                  <div className="section-title-row"><h3>Checklist que completa el Comité Operativo</h3><Pill tone="warn">Obligatorio para score</Pill></div>
+                  <div className="checklist-grid">
+                    <label>Disponibilidad / calidad de datos<select value={committeeInputs.dataReadiness} onChange={(e) => setCommitteeInputs({ ...committeeInputs, dataReadiness: Number(e.target.value) })}><option value={5}>5 · Datos listos y gobernados</option><option value={4}>4 · Datos disponibles y trazables</option><option value={3}>3 · Calidad media; requiere limpieza</option><option value={2}>2 · Datos parciales o dispersos</option><option value={1}>1 · Datos no disponibles</option></select><textarea value={committeeInputs.dataReadinessJustification} onChange={(e) => setCommitteeInputs({ ...committeeInputs, dataReadinessJustification: e.target.value })} rows={2} /></label>
+                    <label>Viabilidad técnica<select value={committeeInputs.technicalFeasibility} onChange={(e) => setCommitteeInputs({ ...committeeInputs, technicalFeasibility: Number(e.target.value) })}><option value={5}>5 · Muy alta</option><option value={4}>4 · Alta; arquitectura definida</option><option value={3}>3 · Media; requiere diseño adicional</option><option value={2}>2 · Baja; dependencias relevantes</option><option value={1}>1 · No viable</option></select><textarea value={committeeInputs.technicalFeasibilityJustification} onChange={(e) => setCommitteeInputs({ ...committeeInputs, technicalFeasibilityJustification: e.target.value })} rows={2} /></label>
+                    <label>Esfuerzo<select value={committeeInputs.executionEffort} onChange={(e) => setCommitteeInputs({ ...committeeInputs, executionEffort: Number(e.target.value) })}><option value={5}>5 · Muy bajo</option><option value={4}>4 · 4 a 6 semanas</option><option value={3}>3 · 6 a 12 semanas</option><option value={2}>2 · Más de 3 meses</option><option value={1}>1 · Muy alto / incierto</option></select><textarea value={committeeInputs.executionEffortJustification} onChange={(e) => setCommitteeInputs({ ...committeeInputs, executionEffortJustification: e.target.value })} rows={2} /></label>
+                    <label>Riesgo y control<select value={committeeInputs.riskControl} onChange={(e) => setCommitteeInputs({ ...committeeInputs, riskControl: Number(e.target.value) })}><option value={5}>5 · Riesgo muy bajo</option><option value={4}>4 · Riesgo bajo</option><option value={3}>3 · Riesgo medio mitigable</option><option value={2}>2 · Riesgo alto</option><option value={1}>1 · Riesgo crítico</option></select><textarea value={committeeInputs.riskControlJustification} onChange={(e) => setCommitteeInputs({ ...committeeInputs, riskControlJustification: e.target.value })} rows={2} /></label>
+                    <label className="wide-field">Reutilización<select value={committeeInputs.reusePotential} onChange={(e) => setCommitteeInputs({ ...committeeInputs, reusePotential: Number(e.target.value) })}><option value={5}>5 · Muy alta reutilización</option><option value={4}>4 · Alta reutilización</option><option value={3}>3 · Reutilización moderada</option><option value={2}>2 · Baja reutilización</option><option value={1}>1 · Caso aislado</option></select><textarea value={committeeInputs.reusePotentialJustification} onChange={(e) => setCommitteeInputs({ ...committeeInputs, reusePotentialJustification: e.target.value })} rows={2} /></label>
+                  </div>
+                  <button onClick={calculateGovernedScore} disabled={scoreLoading}>{scoreLoading ? "Calculando score..." : "Validar datos y calcular score"}</button>
+                </section>
+                <div className="action-row"><button className="ok-button" onClick={() => void updateDemandStatus("approved_for_scoring", "approve_for_scoring", "Aprobado para scoring por Comité Operativo.")} disabled={actionLoading}>Actualizar: aprobar</button><button className="secondary-action" onClick={() => void updateDemandStatus("reformulation_required", "reformulation_required", "Se requiere reformulación antes de continuar.")} disabled={actionLoading}>Actualizar: reformular</button><button className="risk-button" onClick={() => void updateDemandStatus("rejected", "rejected", "Cierre lógico por rechazo del Comité Operativo.")} disabled={actionLoading}>Eliminar lógico</button></div>
+                <h3>Timeline auditable</h3><div className="timeline">{selectedDemand.events.map((event) => <div key={event.event_id ?? `${event.timestamp}-${event.type}`}><span>{formatDate(event.timestamp)}</span><strong>{event.type} · {event.actor}</strong><p>{event.comment}</p></div>)}</div>
               </>
-            ) : (
-              <EmptyState title="Selecciona una solicitud" copy="El detalle operativo aparecerá aquí con brechas, roles, decisión y timeline." />
-            )}
+            ) : <EmptyState title="Selecciona una solicitud" copy="Usa la grilla CRUD para consultar y actualizar demandas." />}
           </article>
         </section>
       ) : null}
 
       {activeView === "executive" ? (
         <section className="executive-view">
-          <section className="kpi-grid">
-            <KpiCard label="Score promedio" value={metrics.averageScore ? metrics.averageScore.toFixed(2) : "—"} helper="de 5.00 puntos" tone="dark" />
-            <KpiCard label="Alta prioridad" value={metrics.high} helper="casos prioritarios" tone="risk" />
-            <KpiCard label="VAN total" value="Sprint 09" helper="modelo financiero" />
-            <KpiCard label="Solicitudes" value={metrics.total} helper="demanda registrada" />
-            <KpiCard label="En revisión" value={metrics.review} helper="comité / arquitectura" tone="warn" />
-            <KpiCard label="Eventos" value={metrics.events} helper="evidencia trazable" />
-          </section>
-
+          <section className="kpi-grid"><KpiCard label="Score promedio" value={metrics.averageScore.toFixed(2)} helper="de 5.00 puntos" tone="dark" /><KpiCard label="Alta prioridad" value={metrics.high} helper="casos críticos" tone="risk" /><KpiCard label="VAN total" value={`$${metrics.vanTotal.toLocaleString("en-US")}`} helper="valor priorizado" tone="ok" /><KpiCard label="Solicitudes" value={metrics.total} helper="demanda registrada" /><KpiCard label="Scored" value={metrics.scored} helper="con score gobernado" /><KpiCard label="Eventos" value={metrics.events} helper="evidencia trazable" /></section>
           <section className="dashboard-grid">
-            <article className="card wide-card">
-              <div className="section-header">
-                <div>
-                  <p className="eyebrow small">Top casos prioritarios</p>
-                  <h2>Portafolio gobernado</h2>
-                </div>
-                <Pill tone="dark">Benchmark 4.0</Pill>
-              </div>
-              {topCases.length ? (
-                <table className="executive-table">
-                  <thead><tr><th>#</th><th>Área</th><th>Caso</th><th>Score</th><th>Prioridad</th><th>Estado</th><th>Decisión</th></tr></thead>
-                  <tbody>
-                    {topCases.map((demand, index) => {
-                      const score = scoreFromReadiness(readinessFromDemand(demand));
-                      const priority = priorityFromDemand(demand);
-                      return (
-                        <tr key={demand.demand_id} onClick={() => { setSelectedDemandId(demand.demand_id); setActiveView("committee"); }}>
-                          <td>{index + 1}</td>
-                          <td>{demand.request.requester_area}</td>
-                          <td><strong>{compact(demand.request.title, 48)}</strong><small>{demand.demand_id}</small></td>
-                          <td><b>{score.toFixed(2)}</b>/5</td>
-                          <td><Pill tone={priorityTone(priority)}>{priority}</Pill></td>
-                          <td><Pill tone={statusTone(demand.status)}>{compact(demand.status, 30)}</Pill></td>
-                          <td>{compact(demand.decision, 38)}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              ) : (
-                <EmptyState title="Sin portafolio todavía" copy="Registra solicitudes desde Intake para construir el tablero ejecutivo." />
-              )}
-            </article>
-
-            <article className="card">
-              <p className="eyebrow small">Distribución</p>
-              <h2>Prioridad</h2>
-              {[{ label: "Alta", value: metrics.high }, { label: "Media", value: metrics.medium }, { label: "Baja", value: metrics.low }].map((item) => (
-                <div className="bar-row" key={item.label}>
-                  <span>{item.label}</span><strong>{item.value}</strong>
-                  <div><i style={{ width: `${percentage(item.value, metrics.total)}%` }} /></div>
-                  <small>{percentage(item.value, metrics.total)}% del backlog</small>
-                </div>
-              ))}
-            </article>
-
-            <article className="card">
-              <p className="eyebrow small">Finanzas</p>
-              <h2>Métricas clave</h2>
-              <div className="finance-list">
-                <div><span>VAN total</span><strong>Pendiente</strong></div>
-                <div><span>TIR máxima</span><strong>Pendiente</strong></div>
-                <div><span>Payback prom.</span><strong>Pendiente</strong></div>
-                <div><span>ROI promedio</span><strong>Pendiente</strong></div>
-              </div>
-              <p className="muted-copy">Zona preparada para el modelo financiero del Sprint 09.</p>
-            </article>
-
-            <article className="card wide-card">
-              <p className="eyebrow small">Análisis comparativo</p>
-              <h2>Score vs benchmark 4.0</h2>
-              {topCases.length ? topCases.map((demand) => {
-                const score = scoreFromReadiness(readinessFromDemand(demand));
-                return (
-                  <div className="benchmark-row" key={demand.demand_id}>
-                    <span>{compact(demand.request.title, 42)}</span>
-                    <div><i style={{ width: `${Math.min(100, (score / 5) * 100)}%` }} /></div>
-                    <strong>{score.toFixed(2)}/5</strong>
-                    <small>Gap {(score - benchmarkScore).toFixed(2)}</small>
-                  </div>
-                );
-              }) : <EmptyState title="Sin benchmark" copy="El comparativo aparecerá cuando existan solicitudes registradas." />}
-            </article>
-
-            <article className="card">
-              <p className="eyebrow small">Brechas</p>
-              <h2>Política · Arquitectura · FinOps</h2>
-              {[{ label: "Política", value: metrics.policyGaps }, { label: "Arquitectura", value: metrics.architectureGaps }, { label: "FinOps", value: metrics.finopsGaps }].map((item) => (
-                <div className="bar-row" key={item.label}>
-                  <span>{item.label}</span><strong>{item.value}</strong>
-                  <div><i style={{ width: `${Math.min(100, item.value * 20)}%` }} /></div>
-                </div>
-              ))}
-            </article>
+            <article className="card wide-card"><div className="section-title-row"><h2>Top casos prioritarios</h2><Pill tone="dark">Benchmark {benchmarkScore.toFixed(1)}</Pill></div>{topCases.length ? <div className="table-wrap"><table><thead><tr><th>#</th><th>Caso</th><th>Score</th><th>Prioridad</th><th>VAN</th><th>Estado</th></tr></thead><tbody>{topCases.map((demand, index) => <tr key={demand.demand_id}><td>{index + 1}</td><td><strong>{compact(demand.request.title, 48)}</strong><small>{demand.demand_id}</small></td><td>{scoreOf(demand).toFixed(2)}</td><td><Pill tone={priorityTone(priorityOf(demand))}>{priorityOf(demand)}</Pill></td><td>{demand.financials ? `$${demand.financials.van_usd.toLocaleString("en-US")}` : "Pendiente"}</td><td>{labelize(demand.status)}</td></tr>)}</tbody></table></div> : <EmptyState title="Sin casos" copy="Calcula el score de al menos una demanda." />}</article>
+            <article className="card"><h2>Distribución por prioridad</h2>{[["Alta", metrics.high, "risk"], ["Media", metrics.medium, "warn"], ["Baja", metrics.low, "neutral"]].map(([label, value, tone]) => <div className="bar-row" key={String(label)}><span>{label}</span><div><i style={{ width: `${percentage(Number(value), metrics.total)}%` }} /></div><Pill tone={tone as PillTone}>{value}</Pill></div>)}</article>
+            <article className="card"><h2>Brechas agregadas</h2><div className="detail-grid"><div><span>Política</span><strong>{metrics.policyGaps}</strong></div><div><span>Arquitectura</span><strong>{metrics.architectureGaps}</strong></div><div><span>FinOps</span><strong>{metrics.finopsGaps}</strong></div></div></article>
           </section>
         </section>
       ) : null}
