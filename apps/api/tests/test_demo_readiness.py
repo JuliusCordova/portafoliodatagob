@@ -11,10 +11,14 @@ class DemoReadinessTest(unittest.TestCase):
     def test_demo_seed_contains_curated_cases(self) -> None:
         records = load_demo_seed_records()
 
-        self.assertGreaterEqual(len(records), 3)
+        self.assertGreaterEqual(len(records), 10)
         self.assertTrue(any(record["status"] == "scored" for record in records))
         self.assertTrue(any(record["status"] == "operative_committee_review" for record in records))
+        self.assertTrue(any(record["status"] == "approved_for_scoring" for record in records))
         self.assertTrue(any(record["status"] == "reformulation_required" for record in records))
+        self.assertTrue(any(record["status"] == "rejected" for record in records))
+        self.assertTrue(any(record.get("request", {}).get("domain_hint") == "Clientes" for record in records))
+        self.assertTrue(any(record.get("request", {}).get("requester_area") == "Finanzas" for record in records))
 
     def test_demo_reset_replaces_runtime_backlog_with_audit_event(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -24,7 +28,7 @@ class DemoReadinessTest(unittest.TestCase):
             persisted = load_demand_records(target_path)
 
             self.assertEqual(len(persisted), len(records))
-            self.assertGreaterEqual(len(persisted), 3)
+            self.assertGreaterEqual(len(persisted), 10)
             self.assertTrue(all(record["events"][-1]["type"] == "demo_reset" for record in persisted))
             self.assertTrue(all(record["events"][-1]["actor"] == "Demo Operator" for record in persisted))
             self.assertTrue(all(record["demand_id"].startswith("DEM-DEMO-") for record in persisted))
