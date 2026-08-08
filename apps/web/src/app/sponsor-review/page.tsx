@@ -44,12 +44,23 @@ type DemandRecord = {
 type BacklogResponse = { count: number; demands: DemandRecord[] };
 type FeedbackTone = "info" | "success" | "warning" | "error";
 type SponsorOutcome = "sponsor_acknowledged" | "sponsor_observation" | "sponsor_adjustment_requested" | "sponsor_paused";
+type SponsorFilter = "all" | "pending" | SponsorOutcome;
 
 type SponsorOutcomeOption = {
   value: SponsorOutcome;
   label: string;
   helper: string;
   tone: FeedbackTone;
+  guardrail: string;
+  nextAction: string;
+};
+
+type ExecutiveMetric = {
+  label: string;
+  value: number;
+  helper: string;
+  tone: FeedbackTone;
+  filter: SponsorFilter;
 };
 
 const sponsorOutcomeOptions: SponsorOutcomeOption[] = [
@@ -57,25 +68,33 @@ const sponsorOutcomeOptions: SponsorOutcomeOption[] = [
     value: "sponsor_acknowledged",
     label: "Visto bueno",
     helper: "El sponsor toma conocimiento y permite continuar con el siguiente paso.",
-    tone: "success"
+    tone: "success",
+    guardrail: "Continuar con priorización, planificación o ejecución según el estado de la demanda.",
+    nextAction: "Avanzar al siguiente gate del portafolio."
   },
   {
     value: "sponsor_observation",
     label: "Con observaciones",
     helper: "El sponsor acepta revisar, pero deja comentarios para seguimiento.",
-    tone: "info"
+    tone: "info",
+    guardrail: "Mantener la demanda activa, pero convertir las observaciones en acciones trazables.",
+    nextAction: "Resolver observaciones antes del siguiente comité."
   },
   {
     value: "sponsor_adjustment_requested",
     label: "Solicita ajuste",
     helper: "El sponsor requiere reformular alcance, evidencia o condiciones antes de avanzar.",
-    tone: "warning"
+    tone: "warning",
+    guardrail: "No promover como aprobada hasta actualizar alcance, evidencia o condiciones.",
+    nextAction: "Solicitar ajuste al owner y revalidar paquete."
   },
   {
     value: "sponsor_paused",
     label: "Pausa ejecutiva",
     helper: "El sponsor solicita pausar la demanda hasta nueva definición.",
-    tone: "error"
+    tone: "error",
+    guardrail: "Evitar avance operativo o inversión adicional hasta nueva decisión ejecutiva.",
+    nextAction: "Mantener en seguimiento ejecutivo y revisar fecha de reactivación."
   }
 ];
 
@@ -104,6 +123,15 @@ function hasCommitteeDecision(demand: DemandRecord) {
   return Boolean(demand.committee_inputs?.committee_final_decision || demand.validation_state?.committee_decision_recorded);
 }
 
+function sponsorOutcomeValue(demand: DemandRecord | null): SponsorOutcome | null {
+  const value = asText(demand?.committee_inputs?.sponsor_review_outcome, "");
+  return sponsorOutcomeOptions.some((option) => option.value === value) ? (value as SponsorOutcome) : null;
+}
+
+function hasSponsorReview(demand: DemandRecord | null) {
+  return Boolean(sponsorOutcomeValue(demand));
+}
+
 function toneColors(tone: FeedbackTone) {
   if (tone === "success") return { border: "#abefc6", bg: "#ecfdf3", text: "#067647", soft: "#dcfae6" };
   if (tone === "warning") return { border: "#fedf89", bg: "#fffaeb", text: "#b54708", soft: "#fef0c7" };
@@ -115,8 +143,50 @@ function outcomeOption(value: string | undefined | null) {
   return sponsorOutcomeOptions.find((item) => item.value === value) ?? sponsorOutcomeOptions[0];
 }
 
-function hasSponsorReview(demand: DemandRecord | null) {
-  return Boolean(demand?.committee_inputs?.sponsor_review_outcome);
+function currentOutcomeOption(demand: DemandRecord | null) {
+  return outcomeOption(sponsorOutcomeValue(demand));
+}
+
+function guardrailFor(demand: DemandRecord | null) {
+  if (!demand) {
+    return {
+      tone: "info" as FeedbackTone,
+      title: "Selecciona un paquete",
+      detail: "El dashboard mostrará el guardrail ejecutivo asociado al resultado sponsor.",
+      nextAction: "Seleccionar una demanda con decisión formal de comité."
+    };
+  }
+
+  const outcome = sponsorOutcomeValue(demand);
+  if (!outcome) {
+    return {
+      tone: "warning" as FeedbackTone,
+      title: "Sponsor pendiente",
+      detail: "Existe decisión de comité, pero aún no hay acknowledgement ejecutivo.",
+      nextAction: "Registrar resultado sponsor antes de cerrar el paquete ejecutivo."
+    };
+  }
+
+  const option = outcomeOption(outcome);
+  return {
+    tone: option.tone,
+    title: option.label,
+    detail: option.guardrail,
+    nextAction: option.nextAction
+  };
+}
+
+function filterLabel(filter: SponsorFilter) {
+  if (filter === "all") return "Todos";
+  if (filter === "pending") return "Pendiente sponsor";
+  return outcomeOption(filter).label;
+}
+
+function matchesFilter(demand: DemandRecord, filter: SponsorFilter) {
+  if (filter === "all") return true;
+  const outcome = sponsorOutcomeValue(demand);
+  if (filter === "pending") return !outcome;
+  return outcome === filter;
 }
 
 function buildDecisionPacket(demand: DemandRecord | null) {
@@ -133,8 +203,9 @@ function buildDecisionPacket(demand: DemandRecord | null) {
     .sort((left, right) => new Date(left.timestamp).getTime() - new Date(right.timestamp).getTime())
     .map((event) => `- ${formatDate(event.timestamp)} | ${event.actor} | ${labelize(event.from_status)} → ${labelize(event.to_status)} | ${event.comment}`)
     .join("\n") || "- Sin eventos registrados.";
+  const guardrail = guardrailFor(demand);
 
-  return `# Paquete de decisión · ATLAS DataGob\n\n## 1. Identificación\n- Demanda: ${demand.demand_id}\n- Título: ${demand.request.title}\n- Área solicitante: ${demand.request.requester_area}\n- Rol solicitante: ${demand.request.requester_role}\n- Dominio: ${demand.request.domain_hint || "No definido"}\n- Consumo objetivo: ${demand.request.target_consumption || "No definido"}\n\n## 2. Descripción ejecutiva\n${demand.request.description}\n\n## 3. Decisión del Comité Operativo\n- Recomendación previa: ${labelize(asText(committee.committee_recommendation, demand.committee?.suggested_decision ?? "pending_committee_recommendation"))}\n- Decisión final: ${labelize(asText(committee.committee_final_decision, demand.decision))}\n- Estado final: ${labelize(asText(committee.committee_final_status, demand.status))}\n- Riesgo comité: ${labelize(asText(committee.committee_risk_level, "medium"))}\n- Actor: ${asText(committee.committee_decision_recorded_by, "Comité Operativo")}\n- Roles: ${roles}\n- Fecha: ${formatDate(asText(committee.committee_decision_recorded_at, demand.updated_at))}\n\n## 4. Justificación\n${asText(committee.committee_reason, "No definido")}\n\n## 5. Condiciones y próximos pasos\n${asText(committee.committee_conditions, "Sin condiciones registradas.")}\n\n## 6. Resultado sponsor\n- Resultado: ${labelize(sponsorOutcome)}\n- Sponsor / revisor: ${asText(committee.sponsor_reviewed_by, "Pendiente")}\n- Fecha revisión: ${formatDate(asText(committee.sponsor_reviewed_at, ""))}\n- Comentarios: ${asText(committee.sponsor_review_comment, "Pendiente de comentarios.")}\n\n## 7. Brechas registradas\n${gaps.length ? gaps.map((gap) => `- ${gap}`).join("\n") : "- Sin brechas registradas."}\n\n## 8. Línea de tiempo\n${timeline}\n\n## 9. Criterio de uso\nEste paquete consolida la evidencia disponible para revisión de sponsor, comité, auditoría o seguimiento de portafolio.\n`;
+  return `# Paquete de decisión · ATLAS DataGob\n\n## 1. Identificación\n- Demanda: ${demand.demand_id}\n- Título: ${demand.request.title}\n- Área solicitante: ${demand.request.requester_area}\n- Rol solicitante: ${demand.request.requester_role}\n- Dominio: ${demand.request.domain_hint || "No definido"}\n- Consumo objetivo: ${demand.request.target_consumption || "No definido"}\n\n## 2. Descripción ejecutiva\n${demand.request.description}\n\n## 3. Decisión del Comité Operativo\n- Recomendación previa: ${labelize(asText(committee.committee_recommendation, demand.committee?.suggested_decision ?? "pending_committee_recommendation"))}\n- Decisión final: ${labelize(asText(committee.committee_final_decision, demand.decision))}\n- Estado final: ${labelize(asText(committee.committee_final_status, demand.status))}\n- Riesgo comité: ${labelize(asText(committee.committee_risk_level, "medium"))}\n- Actor: ${asText(committee.committee_decision_recorded_by, "Comité Operativo")}\n- Roles: ${roles}\n- Fecha: ${formatDate(asText(committee.committee_decision_recorded_at, demand.updated_at))}\n\n## 4. Justificación\n${asText(committee.committee_reason, "No definido")}\n\n## 5. Condiciones y próximos pasos\n${asText(committee.committee_conditions, "Sin condiciones registradas.")}\n\n## 6. Resultado sponsor\n- Resultado: ${labelize(sponsorOutcome)}\n- Sponsor / revisor: ${asText(committee.sponsor_reviewed_by, "Pendiente")}\n- Fecha revisión: ${formatDate(asText(committee.sponsor_reviewed_at, ""))}\n- Comentarios: ${asText(committee.sponsor_review_comment, "Pendiente de comentarios.")}\n\n## 7. Guardrail ejecutivo\n- Lectura: ${guardrail.title}\n- Guardrail: ${guardrail.detail}\n- Próxima acción: ${guardrail.nextAction}\n\n## 8. Brechas registradas\n${gaps.length ? gaps.map((gap) => `- ${gap}`).join("\n") : "- Sin brechas registradas."}\n\n## 9. Línea de tiempo\n${timeline}\n\n## 10. Criterio de uso\nEste paquete consolida la evidencia disponible para revisión de sponsor, comité, auditoría o seguimiento de portafolio.\n`;
 }
 
 function downloadMarkdown(filename: string, content: string) {
@@ -149,6 +220,31 @@ function downloadMarkdown(filename: string, content: string) {
   URL.revokeObjectURL(url);
 }
 
+function metricCard(metric: ExecutiveMetric, activeFilter: SponsorFilter, setFilter: (filter: SponsorFilter) => void) {
+  const colors = toneColors(metric.tone);
+  const isActive = activeFilter === metric.filter;
+  return (
+    <button
+      key={metric.filter}
+      type="button"
+      onClick={() => setFilter(metric.filter)}
+      style={{
+        textAlign: "left",
+        padding: 18,
+        borderRadius: 20,
+        background: isActive ? colors.bg : "white",
+        border: `1px solid ${isActive ? colors.text : "#eaecf0"}`,
+        cursor: "pointer"
+      }}
+      className="no-print"
+    >
+      <span style={{ color: colors.text, fontWeight: 800 }}>{metric.label}</span>
+      <strong style={{ display: "block", fontSize: 30, color: "#101828" }}>{metric.value}</strong>
+      <small style={{ color: "#667085" }}>{metric.helper}</small>
+    </button>
+  );
+}
+
 export default function SponsorReviewPage() {
   const [demands, setDemands] = useState<DemandRecord[]>([]);
   const [selectedDemandId, setSelectedDemandId] = useState("");
@@ -158,16 +254,40 @@ export default function SponsorReviewPage() {
   const [sponsorName, setSponsorName] = useState("Sponsor Ejecutivo");
   const [sponsorOutcome, setSponsorOutcome] = useState<SponsorOutcome>("sponsor_acknowledged");
   const [sponsorComment, setSponsorComment] = useState("Revisión ejecutiva realizada sobre la evidencia presentada.");
+  const [filter, setFilter] = useState<SponsorFilter>("all");
 
   const decidedDemands = useMemo(() => demands.filter(hasCommitteeDecision), [demands]);
+  const dashboard = useMemo(() => {
+    const pending = decidedDemands.filter((demand) => !hasSponsorReview(demand)).length;
+    const acknowledged = decidedDemands.filter((demand) => sponsorOutcomeValue(demand) === "sponsor_acknowledged").length;
+    const observed = decidedDemands.filter((demand) => sponsorOutcomeValue(demand) === "sponsor_observation").length;
+    const adjustment = decidedDemands.filter((demand) => sponsorOutcomeValue(demand) === "sponsor_adjustment_requested").length;
+    const paused = decidedDemands.filter((demand) => sponsorOutcomeValue(demand) === "sponsor_paused").length;
+    return { pending, acknowledged, observed, adjustment, paused };
+  }, [decidedDemands]);
+
+  const metrics: ExecutiveMetric[] = [
+    { label: "Total decididas", value: decidedDemands.length, helper: "Con decisión formal de comité", tone: "info", filter: "all" },
+    { label: "Visto bueno", value: dashboard.acknowledged, helper: "Pueden avanzar al siguiente gate", tone: "success", filter: "sponsor_acknowledged" },
+    { label: "Observadas", value: dashboard.observed, helper: "Requieren seguimiento ejecutivo", tone: "info", filter: "sponsor_observation" },
+    { label: "Ajuste requerido", value: dashboard.adjustment, helper: "No promover sin reformular", tone: "warning", filter: "sponsor_adjustment_requested" },
+    { label: "Pausadas", value: dashboard.paused, helper: "Bloqueadas por decisión ejecutiva", tone: "error", filter: "sponsor_paused" },
+    { label: "Pendiente sponsor", value: dashboard.pending, helper: "Sin acknowledgement ejecutivo", tone: "warning", filter: "pending" }
+  ];
+
+  const filteredDemands = useMemo(() => decidedDemands.filter((demand) => matchesFilter(demand, filter)), [decidedDemands, filter]);
   const selectedDemand = useMemo(
-    () => decidedDemands.find((item) => item.demand_id === selectedDemandId) ?? decidedDemands[0] ?? null,
-    [decidedDemands, selectedDemandId]
+    () => filteredDemands.find((item) => item.demand_id === selectedDemandId) ?? decidedDemands.find((item) => item.demand_id === selectedDemandId) ?? filteredDemands[0] ?? decidedDemands[0] ?? null,
+    [decidedDemands, filteredDemands, selectedDemandId]
   );
   const packet = useMemo(() => buildDecisionPacket(selectedDemand), [selectedDemand]);
   const committee = selectedDemand?.committee_inputs ?? {};
   const selectedOutcome = outcomeOption(sponsorOutcome);
   const selectedOutcomeColors = toneColors(selectedOutcome.tone);
+  const selectedGuardrail = guardrailFor(selectedDemand);
+  const selectedGuardrailColors = toneColors(selectedGuardrail.tone);
+  const currentSponsorOutcome = currentOutcomeOption(selectedDemand);
+  const currentSponsorOutcomeColors = toneColors(hasSponsorReview(selectedDemand) ? currentSponsorOutcome.tone : "warning");
 
   async function loadBacklog(highlightId?: string) {
     try {
@@ -180,7 +300,7 @@ export default function SponsorReviewPage() {
       setDemands(payload.demands);
       const nextSelection = highlightId || selectedDemandId || decided[0]?.demand_id || "";
       setSelectedDemandId(nextSelection);
-      setMessage(`Backlog cargado: ${payload.count} demandas. Paquetes disponibles: ${decided.length}.`);
+      setMessage(`Backlog cargado: ${payload.count} demandas. Paquetes disponibles: ${decided.length}. Filtro: ${filterLabel(filter)}.`);
     } catch (error) {
       const detail = error instanceof Error ? error.message : "Error desconocido";
       setMessage(`No se pudo cargar backlog: ${detail}`);
@@ -195,16 +315,19 @@ export default function SponsorReviewPage() {
   }, []);
 
   function selectDemand(demand: DemandRecord) {
-    const sponsorOutcomeValue = asText(demand.committee_inputs?.sponsor_review_outcome, "");
+    const sponsorOutcomeCandidate = sponsorOutcomeValue(demand);
     setSelectedDemandId(demand.demand_id);
-    if (sponsorOutcomeOptions.some((option) => option.value === sponsorOutcomeValue)) {
-      setSponsorOutcome(sponsorOutcomeValue as SponsorOutcome);
-    } else {
-      setSponsorOutcome("sponsor_acknowledged");
-    }
+    setSponsorOutcome(sponsorOutcomeCandidate ?? "sponsor_acknowledged");
     setSponsorName(asText(demand.committee_inputs?.sponsor_reviewed_by, "Sponsor Ejecutivo"));
     setSponsorComment(asText(demand.committee_inputs?.sponsor_review_comment, "Revisión ejecutiva realizada sobre la evidencia presentada."));
     setMessage(`Paquete seleccionado: ${demand.demand_id}`);
+  }
+
+  function applyFilter(nextFilter: SponsorFilter) {
+    setFilter(nextFilter);
+    const firstMatch = decidedDemands.find((demand) => matchesFilter(demand, nextFilter));
+    if (firstMatch) selectDemand(firstMatch);
+    setMessage(`Filtro ejecutivo aplicado: ${filterLabel(nextFilter)}.`);
   }
 
   async function recordSponsorOutcome() {
@@ -220,6 +343,7 @@ export default function SponsorReviewPage() {
     try {
       setSaving(true);
       const reviewedAt = new Date().toISOString();
+      const outcomeGuardrail = outcomeOption(sponsorOutcome);
       const response = await fetch("/api/demands/update", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -231,7 +355,9 @@ export default function SponsorReviewPage() {
             sponsor_review_comment: sponsorComment.trim(),
             sponsor_reviewed_by: sponsorName.trim() || "Sponsor Ejecutivo",
             sponsor_reviewed_at: reviewedAt,
-            sponsor_review_version: "sponsor-review-v1.0"
+            sponsor_review_guardrail: outcomeGuardrail.guardrail,
+            sponsor_review_next_action: outcomeGuardrail.nextAction,
+            sponsor_review_version: "sponsor-review-v1.1"
           },
           actor: sponsorName.trim() || "Sponsor Ejecutivo",
           comment: `Sponsor review registrado: ${sponsorOutcome}. ${sponsorComment.trim()}`
@@ -241,7 +367,7 @@ export default function SponsorReviewPage() {
       if (!response.ok) throw new Error(`HTTP ${response.status}: ${text}`);
       const updatedDemand = JSON.parse(text) as DemandRecord;
       setDemands((items) => items.map((item) => (item.demand_id === updatedDemand.demand_id ? updatedDemand : item)));
-      setMessage(`Resultado sponsor registrado: ${selectedOutcome.label}.`);
+      setMessage(`Resultado sponsor registrado: ${selectedOutcome.label}. Guardrail: ${outcomeGuardrail.nextAction}`);
       await loadBacklog(updatedDemand.demand_id);
     } catch (error) {
       const detail = error instanceof Error ? error.message : "Error desconocido";
@@ -253,13 +379,13 @@ export default function SponsorReviewPage() {
 
   return (
     <main style={{ minHeight: "100vh", padding: "40px", background: "#f8fafc", color: "#101828", fontFamily: "Inter, system-ui, sans-serif" }}>
-      <section style={{ maxWidth: 1240, margin: "0 auto", display: "grid", gap: 22 }}>
+      <section style={{ maxWidth: 1280, margin: "0 auto", display: "grid", gap: 22 }}>
         <header className="no-print" style={{ display: "flex", justifyContent: "space-between", gap: 20, alignItems: "flex-start" }}>
           <div>
             <p style={{ margin: 0, color: "#991b1b", fontWeight: 800, textTransform: "uppercase", letterSpacing: 1 }}>ATLAS DataGob</p>
-            <h1 style={{ margin: "8px 0", fontSize: 40, lineHeight: 1.05 }}>Sponsor review</h1>
-            <p style={{ margin: 0, maxWidth: 780, color: "#475467", fontSize: 17 }}>
-              Vista ejecutiva para revisar paquetes de decisión, guardar salida PDF y registrar el resultado del sponsor.
+            <h1 style={{ margin: "8px 0", fontSize: 40, lineHeight: 1.05 }}>Sponsor decision dashboard</h1>
+            <p style={{ margin: 0, maxWidth: 820, color: "#475467", fontSize: 17 }}>
+              Vista ejecutiva para revisar paquetes de decisión, capturar resultado sponsor y orientar la siguiente acción con guardrails.
             </p>
           </div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
@@ -281,61 +407,63 @@ export default function SponsorReviewPage() {
 
         <p className="no-print" style={{ padding: 14, borderRadius: 16, background: "#eef4ff", color: "#3538cd", margin: 0, fontWeight: 800 }}>{message}</p>
 
-        <section className="no-print" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 14 }}>
-          <article style={{ padding: 18, borderRadius: 20, background: "white", border: "1px solid #eaecf0" }}>
-            <span style={{ color: "#667085", fontWeight: 700 }}>Decididas</span>
-            <strong style={{ display: "block", fontSize: 30 }}>{decidedDemands.length}</strong>
-          </article>
-          <article style={{ padding: 18, borderRadius: 20, background: "white", border: "1px solid #eaecf0" }}>
-            <span style={{ color: "#667085", fontWeight: 700 }}>Con sponsor review</span>
-            <strong style={{ display: "block", fontSize: 30 }}>{decidedDemands.filter(hasSponsorReview).length}</strong>
-          </article>
-          <article style={{ padding: 18, borderRadius: 20, background: selectedOutcomeColors.bg, border: `1px solid ${selectedOutcomeColors.border}` }}>
-            <span style={{ color: selectedOutcomeColors.text, fontWeight: 700 }}>Resultado actual</span>
-            <strong style={{ display: "block", fontSize: 18, marginTop: 8 }}>{hasSponsorReview(selectedDemand) ? asText(committee.sponsor_review_label, labelize(asText(committee.sponsor_review_outcome))) : "Pendiente sponsor"}</strong>
-          </article>
-          <article style={{ padding: 18, borderRadius: 20, background: "white", border: "1px solid #eaecf0" }}>
-            <span style={{ color: "#667085", fontWeight: 700 }}>Última actualización</span>
-            <strong style={{ display: "block", fontSize: 18, marginTop: 8 }}>{formatDate(selectedDemand?.updated_at)}</strong>
-          </article>
+        <section className="no-print" style={{ display: "grid", gridTemplateColumns: "repeat(6, minmax(0, 1fr))", gap: 14 }}>
+          {metrics.map((metric) => metricCard(metric, filter, applyFilter))}
         </section>
 
-        <section style={{ display: "grid", gridTemplateColumns: "340px 1fr", gap: 18, alignItems: "start" }}>
+        <section className="no-print" style={{ padding: 20, borderRadius: 24, background: selectedGuardrailColors.bg, border: `1px solid ${selectedGuardrailColors.border}`, display: "grid", gridTemplateColumns: "1.2fr 2fr 1.5fr", gap: 16, alignItems: "center" }}>
+          <div>
+            <span style={{ color: selectedGuardrailColors.text, fontWeight: 900, textTransform: "uppercase", letterSpacing: 0.6 }}>Guardrail ejecutivo</span>
+            <h2 style={{ margin: "6px 0 0" }}>{selectedGuardrail.title}</h2>
+          </div>
+          <p style={{ margin: 0, color: "#344054", fontWeight: 700 }}>{selectedGuardrail.detail}</p>
+          <strong style={{ color: selectedGuardrailColors.text }}>{selectedGuardrail.nextAction}</strong>
+        </section>
+
+        <section style={{ display: "grid", gridTemplateColumns: "360px 1fr", gap: 18, alignItems: "start" }}>
           <aside className="no-print" style={{ display: "grid", gap: 10 }}>
-            <h2 style={{ margin: 0 }}>Paquetes disponibles</h2>
-            {decidedDemands.length === 0 ? (
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+              <h2 style={{ margin: 0 }}>Paquetes</h2>
+              <small style={{ color: "#667085", fontWeight: 800 }}>{filterLabel(filter)} · {filteredDemands.length}</small>
+            </div>
+            {filteredDemands.length === 0 ? (
               <article style={{ padding: 18, borderRadius: 18, background: "white", border: "1px solid #eaecf0" }}>
-                Aún no hay demandas con decisión de comité.
+                No hay paquetes para el filtro seleccionado.
               </article>
             ) : (
-              decidedDemands.map((demand) => (
-                <button
-                  key={demand.demand_id}
-                  onClick={() => selectDemand(demand)}
-                  style={{
-                    textAlign: "left",
-                    padding: 16,
-                    borderRadius: 18,
-                    background: selectedDemand?.demand_id === demand.demand_id ? "#111827" : "white",
-                    color: selectedDemand?.demand_id === demand.demand_id ? "white" : "#101828",
-                    border: "1px solid #eaecf0",
-                    cursor: "pointer"
-                  }}
-                >
-                  <strong style={{ display: "block" }}>{demand.request.title}</strong>
-                  <small>{demand.demand_id}</small>
-                  <span style={{ display: "block", marginTop: 8 }}>{labelize(asText(demand.committee_inputs?.committee_final_decision, demand.decision))}</span>
-                  <em style={{ display: "block", marginTop: 6, color: selectedDemand?.demand_id === demand.demand_id ? "#d0d5dd" : "#667085" }}>
-                    {hasSponsorReview(demand) ? `Sponsor: ${asText(demand.committee_inputs?.sponsor_review_label, labelize(asText(demand.committee_inputs?.sponsor_review_outcome)))}` : "Sponsor pendiente"}
-                  </em>
-                </button>
-              ))
+              filteredDemands.map((demand) => {
+                const outcome = sponsorOutcomeValue(demand);
+                const option = outcomeOption(outcome);
+                const colors = toneColors(outcome ? option.tone : "warning");
+                return (
+                  <button
+                    key={demand.demand_id}
+                    onClick={() => selectDemand(demand)}
+                    style={{
+                      textAlign: "left",
+                      padding: 16,
+                      borderRadius: 18,
+                      background: selectedDemand?.demand_id === demand.demand_id ? "#111827" : "white",
+                      color: selectedDemand?.demand_id === demand.demand_id ? "white" : "#101828",
+                      border: `1px solid ${selectedDemand?.demand_id === demand.demand_id ? "#111827" : colors.border}`,
+                      cursor: "pointer"
+                    }}
+                  >
+                    <strong style={{ display: "block" }}>{demand.request.title}</strong>
+                    <small>{demand.demand_id}</small>
+                    <span style={{ display: "block", marginTop: 8 }}>{labelize(asText(demand.committee_inputs?.committee_final_decision, demand.decision))}</span>
+                    <em style={{ display: "block", marginTop: 6, color: selectedDemand?.demand_id === demand.demand_id ? "#d0d5dd" : colors.text }}>
+                      {outcome ? `Sponsor: ${asText(demand.committee_inputs?.sponsor_review_label, option.label)}` : "Sponsor pendiente"}
+                    </em>
+                  </button>
+                );
+              })
             )}
           </aside>
 
           <section style={{ display: "grid", gap: 18 }}>
             <article className="no-print" style={{ padding: 24, borderRadius: 24, background: "white", border: "1px solid #eaecf0" }}>
-              <h2 style={{ marginTop: 0 }}>Resultado sponsor</h2>
+              <h2 style={{ marginTop: 0 }}>Registrar resultado sponsor</h2>
               {!selectedDemand ? (
                 <p>Selecciona una demanda con decisión de comité para registrar resultado sponsor.</p>
               ) : (
@@ -355,6 +483,7 @@ export default function SponsorReviewPage() {
                           <span>
                             <strong>{option.label}</strong>
                             <small style={{ display: "block", color: "#667085", marginTop: 4 }}>{option.helper}</small>
+                            <em style={{ display: "block", color: colors.text, marginTop: 6, fontWeight: 800 }}>{option.nextAction}</em>
                           </span>
                         </label>
                       );
@@ -365,6 +494,11 @@ export default function SponsorReviewPage() {
                     Comentario ejecutivo
                     <textarea rows={4} value={sponsorComment} onChange={(event) => setSponsorComment(event.target.value)} style={{ padding: 12, borderRadius: 12, border: "1px solid #d0d5dd", fontFamily: "inherit" }} />
                   </label>
+
+                  <div style={{ padding: 14, borderRadius: 16, border: `1px solid ${selectedOutcomeColors.border}`, background: selectedOutcomeColors.bg }}>
+                    <strong style={{ color: selectedOutcomeColors.text }}>Guardrail al guardar: </strong>
+                    <span>{selectedOutcome.guardrail}</span>
+                  </div>
 
                   <button
                     onClick={() => void recordSponsorOutcome()}
@@ -404,13 +538,19 @@ export default function SponsorReviewPage() {
                       <p><strong>Fecha:</strong> {formatDate(asText(committee.committee_decision_recorded_at, selectedDemand.updated_at))}</p>
                     </article>
 
-                    <article style={{ padding: 20, borderRadius: 20, border: `1px solid ${selectedOutcomeColors.border}`, background: hasSponsorReview(selectedDemand) ? selectedOutcomeColors.bg : "#f9fafb" }}>
+                    <article style={{ padding: 20, borderRadius: 20, border: `1px solid ${currentSponsorOutcomeColors.border}`, background: hasSponsorReview(selectedDemand) ? currentSponsorOutcomeColors.bg : "#f9fafb" }}>
                       <h3 style={{ marginTop: 0 }}>Resultado sponsor</h3>
-                      <p><strong>Resultado:</strong> {hasSponsorReview(selectedDemand) ? asText(committee.sponsor_review_label, labelize(asText(committee.sponsor_review_outcome))) : "Pendiente"}</p>
+                      <p><strong>Resultado:</strong> {hasSponsorReview(selectedDemand) ? asText(committee.sponsor_review_label, currentSponsorOutcome.label) : "Pendiente"}</p>
                       <p><strong>Revisor:</strong> {asText(committee.sponsor_reviewed_by, "Pendiente")}</p>
                       <p><strong>Fecha:</strong> {formatDate(asText(committee.sponsor_reviewed_at, ""))}</p>
                       <p><strong>Comentario:</strong> {asText(committee.sponsor_review_comment, "Pendiente de comentarios.")}</p>
                     </article>
+                  </section>
+
+                  <section style={{ padding: 20, borderRadius: 20, border: `1px solid ${selectedGuardrailColors.border}`, background: selectedGuardrailColors.bg }}>
+                    <h3 style={{ marginTop: 0 }}>Guardrail ejecutivo</h3>
+                    <p><strong>{selectedGuardrail.title}:</strong> {selectedGuardrail.detail}</p>
+                    <p><strong>Próxima acción:</strong> {selectedGuardrail.nextAction}</p>
                   </section>
 
                   <section style={{ display: "grid", gap: 12 }}>
@@ -451,7 +591,7 @@ export default function SponsorReviewPage() {
           body { background: white !important; }
           .no-print { display: none !important; }
           main { padding: 0 !important; background: white !important; }
-          #decision-packet { box-shadow: none !important; border: none !important; border-radius: 0 !important; }
+          #decision-packet { box-shadow: none !important; border: none !important; }
         }
       `}</style>
     </main>
