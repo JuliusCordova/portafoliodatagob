@@ -111,6 +111,23 @@ if FastAPI:
         tir_percent: float | None = None
         payback_years: float | None = Field(default=None, ge=0)
 
+        # Data Owner business checklist.
+        operational_impact: int | None = Field(default=None, ge=1, le=5)
+        operational_justification: str | None = None
+        strategic_impact: int | None = Field(default=None, ge=1, le=5)
+        strategic_impact_justification: str | None = None
+        strategic_alignment_justification: str | None = None
+
+        # Committee technical/governance checklist.
+        data_readiness_justification: str | None = None
+        technical_feasibility_justification: str | None = None
+        execution_effort: int | None = Field(default=None, ge=1, le=5)
+        execution_effort_justification: str | None = None
+        risk_control: int | None = Field(default=None, ge=1, le=5)
+        risk_control_justification: str | None = None
+        reuse_potential: int | None = Field(default=None, ge=1, le=5)
+        reuse_potential_justification: str | None = None
+
         # Optional detailed assumptions for committee/portfolio modelling.
         initial_investment_usd: float | None = Field(default=None, ge=0)
         annual_benefit_usd: float | None = Field(default=None, ge=0)
@@ -222,6 +239,27 @@ if FastAPI:
                         ),
                     )
                 )
+            scoring_result["business_inputs"] = {
+                "operational_impact": payload.operational_impact,
+                "operational_justification": payload.operational_justification,
+                "strategic_impact": payload.strategic_impact,
+                "strategic_impact_justification": payload.strategic_impact_justification,
+                "strategic_alignment": payload.strategic_alignment,
+                "strategic_alignment_justification": payload.strategic_alignment_justification,
+                "business_value": payload.business_value,
+            }
+            scoring_result["committee_inputs"] = {
+                "data_readiness": payload.data_readiness,
+                "data_readiness_justification": payload.data_readiness_justification,
+                "technical_feasibility": payload.technical_feasibility,
+                "technical_feasibility_justification": payload.technical_feasibility_justification,
+                "execution_effort": payload.execution_effort,
+                "execution_effort_justification": payload.execution_effort_justification,
+                "risk_control": payload.risk_control,
+                "risk_control_justification": payload.risk_control_justification,
+                "reuse_potential": payload.reuse_potential,
+                "reuse_potential_justification": payload.reuse_potential_justification,
+            }
             record = update_demand_record_scoring(
                 demand_id,
                 scoring_result=scoring_result,
