@@ -28,6 +28,21 @@ type ValidationResult = {
   committee_summary: string;
 };
 
+type DemandRecord = {
+  demand_id: string;
+  created_at: string;
+  updated_at: string;
+  status: string;
+  decision: string;
+  current_stage: string;
+  events: Array<{ timestamp: string; type: string; actor: string; to_status: string; comment: string }>;
+};
+
+type PersistedValidationResponse = {
+  demand: DemandRecord;
+  validation: ValidationResult;
+};
+
 type RuntimeMode = "demo" | "api" | "error" | "loading";
 
 const defaultResult: ValidationResult = {
@@ -111,7 +126,7 @@ function GapList({ title, items, tone }: { title: string; items: string[]; tone:
 function runtimeLabel(mode: RuntimeMode) {
   if (mode === "api") return "API conectada";
   if (mode === "error") return "Error conexión";
-  if (mode === "loading") return "Validando";
+  if (mode === "loading") return "Guardando";
   return "Demo local";
 }
 
@@ -126,6 +141,7 @@ export default function HomePage() {
   );
   const [targetConsumption, setTargetConsumption] = useState("BI ejecutivo / dashboard");
   const [result, setResult] = useState<ValidationResult>(defaultResult);
+  const [persistedDemand, setPersistedDemand] = useState<DemandRecord | null>(null);
   const [mode, setMode] = useState<RuntimeMode>("demo");
   const [connectionMessage, setConnectionMessage] = useState("Esperando validación del requerimiento.");
 
@@ -137,7 +153,7 @@ export default function HomePage() {
   async function validateRequest() {
     try {
       setMode("loading");
-      setConnectionMessage("Validando por proxy interno Next.js → FastAPI localhost:8000...");
+      setConnectionMessage("Validando y guardando solicitud en backlog por proxy interno Next.js → FastAPI localhost:8000...");
       const response = await fetch("/api/intake/validate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -154,15 +170,17 @@ export default function HomePage() {
       if (!response.ok) {
         throw new Error(`Proxy/API validation failed with HTTP ${response.status}: ${responseText}`);
       }
-      const payload = JSON.parse(responseText) as ValidationResult;
+      const payload = JSON.parse(responseText) as PersistedValidationResponse;
       setMode("api");
-      setConnectionMessage("Conectado correctamente por proxy interno Next.js → FastAPI localhost:8000.");
-      setResult(payload);
+      setPersistedDemand(payload.demand);
+      setConnectionMessage(`Solicitud ${payload.demand.demand_id} validada y guardada en backlog.`);
+      setResult(payload.validation);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Error desconocido al conectar con el API.";
       setMode("error");
       setConnectionMessage(`No se pudo conectar con el API: ${message}`);
       setResult(defaultResult);
+      setPersistedDemand(null);
     }
   }
 
@@ -170,10 +188,10 @@ export default function HomePage() {
     <main className="shell">
       <section className="hero">
         <div>
-          <p className="eyebrow">ATLAS DataGob · Sprint 06.2</p>
-          <h1>Intake multiagente con validación de políticas y arquitectura</h1>
+          <p className="eyebrow">ATLAS DataGob · Sprint 07</p>
+          <h1>Intake multiagente con validación, backlog y trazabilidad</h1>
           <p className="hero-copy">
-            Captura el requerimiento, detecta brechas contra políticas, valida la arquitectura canónica Google Cloud y deriva al Comité Operativo con decisión final del Arquitecto de Datos.
+            Captura el requerimiento, detecta brechas contra políticas, valida la arquitectura canónica Google Cloud y registra la solicitud con estado, decisión y evidencia trazable.
           </p>
         </div>
         <div className="hero-badge">
@@ -186,6 +204,15 @@ export default function HomePage() {
         <strong>Estado de conexión</strong>
         <span>{connectionMessage}</span>
       </section>
+
+      {persistedDemand ? (
+        <section className="status-card status-api">
+          <strong>Backlog persistente</strong>
+          <span>
+            {persistedDemand.demand_id} · Estado: {persistedDemand.status} · Decisión: {persistedDemand.decision} · Etapa: {persistedDemand.current_stage}
+          </span>
+        </section>
+      ) : null}
 
       <section className="metrics-grid">
         <article className="metric-card">
@@ -238,7 +265,7 @@ export default function HomePage() {
             </select>
           </label>
 
-          <button onClick={validateRequest}>Validar requerimiento</button>
+          <button onClick={validateRequest}>Validar y guardar solicitud</button>
         </article>
 
         <article className="card result-card">

@@ -5,7 +5,7 @@ export async function POST(request: Request) {
 
   try {
     const payload = await request.json();
-    const response = await fetch(`${backendBaseUrl}/intake/policy-architecture-validate`, {
+    const response = await fetch(`${backendBaseUrl}/demands/validate-and-create`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -19,7 +19,8 @@ export async function POST(request: Request) {
       status: response.status,
       headers: {
         "content-type": contentType,
-        "x-atlas-proxy-target": backendBaseUrl
+        "x-atlas-proxy-target": backendBaseUrl,
+        "x-atlas-operation": "validate-and-create-demand"
       }
     });
   } catch (error) {

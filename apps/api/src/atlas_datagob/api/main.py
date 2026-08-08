@@ -15,6 +15,12 @@ from atlas_datagob.services.canonical_catalog import (
     validate_canonical_model,
 )
 from atlas_datagob.services.classifier import classify_demand
+from atlas_datagob.services.demand_backlog import (
+    create_demand_record,
+    get_demand_record,
+    list_demand_records,
+    update_demand_record_status,
+)
 from atlas_datagob.services.policy_architecture_validation import (
     IntakeValidationContext,
     available_policies,
@@ -37,6 +43,7 @@ DATA_ROOT = Path("data")
 DOMAINS_PATH = DATA_ROOT / "synthetic" / "domains" / "domains.json"
 DICTIONARY_PATH = DATA_ROOT / "canonical" / "data_dictionary.json"
 ER_MODEL_PATH = DATA_ROOT / "canonical" / "entity_relationship_model.json"
+API_VERSION = "0.5.0"
 
 
 def _allowed_origins() -> list[str]:
@@ -53,7 +60,7 @@ def _allowed_origin_regex() -> str:
 
 
 if FastAPI:
-    app = FastAPI(title="ATLAS DataGob API", version="0.4.1")
+    app = FastAPI(title="ATLAS DataGob API", version=API_VERSION)
 
     app.add_middleware(
         CORSMiddleware,
@@ -74,6 +81,12 @@ if FastAPI:
     class PolicyArchitecturePayload(DemandPayload):
         target_consumption: str | None = None
 
+    class DemandStatusPayload(BaseModel):
+        status: str = Field(min_length=3)
+        decision: str | None = None
+        comment: str | None = None
+        actor: str = "Data Architect"
+
     class ScoringPayload(BaseModel):
         strategic_alignment: int = Field(ge=1, le=5)
         business_value: int = Field(ge=1, le=5)
@@ -84,7 +97,7 @@ if FastAPI:
 
     @app.get("/health")
     def health() -> dict:
-        return {"status": "ok", "product": "ATLAS DataGob", "version": "0.4.1"}
+        return {"status": "ok", "product": "ATLAS DataGob", "version": API_VERSION}
 
     @app.post("/intake/classify")
     def classify(payload: DemandPayload) -> dict:
@@ -102,6 +115,41 @@ if FastAPI:
     def validate_policy_architecture_endpoint(payload: PolicyArchitecturePayload) -> dict:
         context = IntakeValidationContext(**payload.model_dump())
         return PolicyIntakeAgent().validate(context)
+
+    @app.post("/demands/validate-and-create")
+    def validate_and_create_demand(payload: PolicyArchitecturePayload) -> dict:
+        context = IntakeValidationContext(**payload.model_dump())
+        validation = PolicyIntakeAgent().validate(context)
+        demand = create_demand_record(validation)
+        return {"demand": demand, "validation": validation}
+
+    @app.get("/demands/backlog")
+    def demand_backlog(status: str | None = None) -> dict:
+        records = list_demand_records(status=status)
+        return {"count": len(records), "demands": records}
+
+    @app.get("/demands/{demand_id}")
+    def demand_detail(demand_id: str) -> dict:
+        record = get_demand_record(demand_id)
+        if not record:
+            raise HTTPException(status_code=404, detail="Demand record not found")
+        return {"demand": record}
+
+    @app.patch("/demands/{demand_id}/status")
+    def demand_status_update(demand_id: str, payload: DemandStatusPayload) -> dict:
+        try:
+            record = update_demand_record_status(
+                demand_id,
+                status=payload.status,
+                decision=payload.decision,
+                comment=payload.comment,
+                actor=payload.actor,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if not record:
+            raise HTTPException(status_code=404, detail="Demand record not found")
+        return {"demand": record}
 
     @app.get("/policies")
     def policies() -> dict:
@@ -123,7 +171,7 @@ if FastAPI:
             raise HTTPException(status_code=404, detail="Domain catalog not found")
         domains = load_domains(DOMAINS_PATH)
         return {
-            "version": "0.4.1",
+            "version": API_VERSION,
             "domains": [
                 {
                     "domain_id": domain.domain_id,
