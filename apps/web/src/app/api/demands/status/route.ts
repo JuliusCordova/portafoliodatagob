@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { atlasJsonProxyHeaders } from "../../_lib/identity";
 
 type StatusUpdatePayload = {
   demand_id?: string;
@@ -27,7 +28,7 @@ export async function PATCH(request: Request) {
     const { demand_id, ...statusPayload } = payload;
     const response = await fetch(`${backendBaseUrl}/demands/${encodeURIComponent(demand_id)}/status`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: atlasJsonProxyHeaders(request),
       body: JSON.stringify(statusPayload),
       cache: "no-store"
     });

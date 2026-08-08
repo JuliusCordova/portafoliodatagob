@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { atlasJsonProxyHeaders } from "../../_lib/identity";
 
 export async function POST(request: Request) {
   const backendBaseUrl = process.env.ATLAS_INTERNAL_API_BASE ?? "http://localhost:8000";
@@ -7,7 +8,7 @@ export async function POST(request: Request) {
     const payload = await request.json();
     const response = await fetch(`${backendBaseUrl}/demands/validate-and-create`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: atlasJsonProxyHeaders(request),
       body: JSON.stringify(payload),
       cache: "no-store"
     });

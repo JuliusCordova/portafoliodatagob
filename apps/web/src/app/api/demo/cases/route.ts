@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
+import { atlasJsonProxyHeaders } from "../../_lib/identity";
 
-export async function GET() {
+export async function GET(request: Request) {
   const backendBaseUrl = process.env.ATLAS_INTERNAL_API_BASE ?? "http://localhost:8000";
 
   try {
     const response = await fetch(`${backendBaseUrl}/demo/cases`, {
       method: "GET",
-      headers: { "Content-Type": "application/json" },
+      headers: atlasJsonProxyHeaders(request),
       cache: "no-store"
     });
 
