@@ -1,6 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+type CommitteeRoute = {
+  route?: string;
+  committee_stage?: string;
+  required_reviewers?: string[];
+  required_review_roles?: string[];
+  suggested_decision: string;
+  data_architect_final_validation_required?: boolean;
+};
 
 type ValidationResult = {
   classification: {
@@ -17,15 +26,19 @@ type ValidationResult = {
   };
   policy_gaps: string[];
   finops_gaps: string[];
-  operative_committee: {
-    route?: string;
-    committee_stage?: string;
-    required_reviewers?: string[];
-    required_review_roles?: string[];
-    suggested_decision: string;
-    data_architect_final_validation_required?: boolean;
-  };
+  operative_committee: CommitteeRoute;
   committee_summary: string;
+};
+
+type DemandEvent = {
+  event_id?: string;
+  timestamp: string;
+  type: string;
+  actor: string;
+  from_status?: string | null;
+  to_status: string;
+  decision?: string | null;
+  comment: string;
 };
 
 type DemandRecord = {
@@ -35,12 +48,33 @@ type DemandRecord = {
   status: string;
   decision: string;
   current_stage: string;
-  events: Array<{ timestamp: string; type: string; actor: string; to_status: string; comment: string }>;
+  request: {
+    title: string;
+    description: string;
+    requester_area: string;
+    requester_role: string;
+    domain_hint?: string | null;
+    target_consumption?: string | null;
+  };
+  classification: ValidationResult["classification"];
+  architecture: ValidationResult["architecture"];
+  policy_gaps: string[];
+  architecture_gaps: string[];
+  finops_gaps: string[];
+  committee: CommitteeRoute;
+  committee_summary: string;
+  agent_trace: string[];
+  events: DemandEvent[];
 };
 
 type PersistedValidationResponse = {
   demand: DemandRecord;
   validation: ValidationResult;
+};
+
+type BacklogResponse = {
+  count: number;
+  demands: DemandRecord[];
 };
 
 type RuntimeMode = "demo" | "api" | "error" | "loading";
@@ -126,12 +160,39 @@ function GapList({ title, items, tone }: { title: string; items: string[]; tone:
 function runtimeLabel(mode: RuntimeMode) {
   if (mode === "api") return "API conectada";
   if (mode === "error") return "Error conexión";
-  if (mode === "loading") return "Guardando";
+  if (mode === "loading") return "Sincronizando";
   return "Demo local";
 }
 
 function committeeReviewers(result: ValidationResult): string[] {
   return result.operative_committee.required_reviewers ?? result.operative_committee.required_review_roles ?? [];
+}
+
+function demandReviewers(demand: DemandRecord): string[] {
+  return demand.committee.required_reviewers ?? demand.committee.required_review_roles ?? [];
+}
+
+function labelize(value: string | undefined | null) {
+  return value ? value.replaceAll("_", " ") : "No definido";
+}
+
+function formatDate(value: string) {
+  try {
+    return new Intl.DateTimeFormat("es-PE", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
+  } catch {
+    return value;
+  }
+}
+
+function statusTone(status: string): "neutral" | "ok" | "warn" | "risk" {
+  if (status.includes("approved")) return "ok";
+  if (status.includes("rejected")) return "risk";
+  if (status.includes("reformulation") || status.includes("review")) return "warn";
+  return "neutral";
+}
+
+function demandGapCount(demand: DemandRecord) {
+  return demand.policy_gaps.length + demand.architecture_gaps.length + demand.finops_gaps.length;
 }
 
 export default function HomePage() {
@@ -142,13 +203,56 @@ export default function HomePage() {
   const [targetConsumption, setTargetConsumption] = useState("BI ejecutivo / dashboard");
   const [result, setResult] = useState<ValidationResult>(defaultResult);
   const [persistedDemand, setPersistedDemand] = useState<DemandRecord | null>(null);
+  const [backlog, setBacklog] = useState<DemandRecord[]>([]);
+  const [selectedDemandId, setSelectedDemandId] = useState<string | null>(null);
+  const [backlogMessage, setBacklogMessage] = useState("Backlog pendiente de sincronización.");
   const [mode, setMode] = useState<RuntimeMode>("demo");
   const [connectionMessage, setConnectionMessage] = useState("Esperando validación del requerimiento.");
+  const [backlogLoading, setBacklogLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
 
   const readinessScore = useMemo(() => {
     const gaps = result.policy_gaps.length + result.finops_gaps.length + result.architecture.architecture_gaps.length;
     return Math.max(25, 100 - gaps * 12);
   }, [result]);
+
+  const selectedDemand = useMemo(() => {
+    return backlog.find((item) => item.demand_id === selectedDemandId) ?? persistedDemand;
+  }, [backlog, persistedDemand, selectedDemandId]);
+
+  const committeeQueue = useMemo(() => backlog.filter((item) => item.status.includes("review")).length, [backlog]);
+  const approvedCount = useMemo(() => backlog.filter((item) => item.status.includes("approved")).length, [backlog]);
+  const eventCount = useMemo(() => backlog.reduce((total, item) => total + item.events.length, 0), [backlog]);
+
+  async function loadBacklog(highlightDemandId?: string) {
+    try {
+      setBacklogLoading(true);
+      const response = await fetch("/api/demands/backlog", { cache: "no-store" });
+      const responseText = await response.text();
+      if (!response.ok) {
+        throw new Error(`Backlog failed with HTTP ${response.status}: ${responseText}`);
+      }
+      const payload = JSON.parse(responseText) as BacklogResponse;
+      setBacklog(payload.demands);
+      setBacklogMessage(`Backlog sincronizado: ${payload.count} solicitudes registradas.`);
+
+      if (highlightDemandId) {
+        setSelectedDemandId(highlightDemandId);
+      } else if (!selectedDemandId && payload.demands.length) {
+        setSelectedDemandId(payload.demands[0].demand_id);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Error desconocido al sincronizar backlog.";
+      setBacklogMessage(`No se pudo sincronizar backlog: ${message}`);
+    } finally {
+      setBacklogLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadBacklog();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function validateRequest() {
     try {
@@ -173,8 +277,10 @@ export default function HomePage() {
       const payload = JSON.parse(responseText) as PersistedValidationResponse;
       setMode("api");
       setPersistedDemand(payload.demand);
+      setSelectedDemandId(payload.demand.demand_id);
       setConnectionMessage(`Solicitud ${payload.demand.demand_id} validada y guardada en backlog.`);
       setResult(payload.validation);
+      await loadBacklog(payload.demand.demand_id);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Error desconocido al conectar con el API.";
       setMode("error");
@@ -184,14 +290,47 @@ export default function HomePage() {
     }
   }
 
+  async function updateDemandStatus(status: string, decision: string, comment: string) {
+    if (!selectedDemand) return;
+
+    try {
+      setActionLoading(true);
+      const response = await fetch("/api/demands/status", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          demand_id: selectedDemand.demand_id,
+          status,
+          decision,
+          actor: "Data Architect",
+          comment
+        })
+      });
+      const responseText = await response.text();
+      if (!response.ok) {
+        throw new Error(`Status update failed with HTTP ${response.status}: ${responseText}`);
+      }
+      const payload = JSON.parse(responseText) as { demand: DemandRecord };
+      setPersistedDemand(payload.demand);
+      setSelectedDemandId(payload.demand.demand_id);
+      setBacklog((items) => items.map((item) => (item.demand_id === payload.demand.demand_id ? payload.demand : item)));
+      setBacklogMessage(`Estado actualizado: ${payload.demand.demand_id} → ${labelize(payload.demand.status)}.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Error desconocido al actualizar estado.";
+      setBacklogMessage(`No se pudo actualizar el estado: ${message}`);
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
   return (
     <main className="shell">
       <section className="hero">
         <div>
-          <p className="eyebrow">ATLAS DataGob · Sprint 07</p>
-          <h1>Intake multiagente con validación, backlog y trazabilidad</h1>
+          <p className="eyebrow">ATLAS DataGob · Sprint 08</p>
+          <h1>Cockpit ejecutivo de demanda, decisiones y trazabilidad</h1>
           <p className="hero-copy">
-            Captura el requerimiento, detecta brechas contra políticas, valida la arquitectura canónica Google Cloud y registra la solicitud con estado, decisión y evidencia trazable.
+            Captura el requerimiento, valida políticas y arquitectura, registra la solicitud en backlog y permite al comité cambiar estados dejando evidencia auditable.
           </p>
         </div>
         <div className="hero-badge">
@@ -205,35 +344,31 @@ export default function HomePage() {
         <span>{connectionMessage}</span>
       </section>
 
-      {persistedDemand ? (
-        <section className="status-card status-api">
-          <strong>Backlog persistente</strong>
-          <span>
-            {persistedDemand.demand_id} · Estado: {persistedDemand.status} · Decisión: {persistedDemand.decision} · Etapa: {persistedDemand.current_stage}
-          </span>
-        </section>
-      ) : null}
+      <section className="status-card status-api">
+        <strong>Backlog persistente</strong>
+        <span>{backlogLoading ? "Sincronizando backlog..." : backlogMessage}</span>
+      </section>
 
       <section className="metrics-grid">
         <article className="metric-card">
-          <span>Readiness</span>
-          <strong>{readinessScore}%</strong>
-          <small>Antes de Comité Operativo</small>
+          <span>Solicitudes</span>
+          <strong>{backlog.length}</strong>
+          <small>Backlog persistente</small>
         </article>
         <article className="metric-card">
-          <span>Patrón</span>
-          <strong>{result.architecture.architecture_pattern}</strong>
-          <small>Arquitectura canónica</small>
+          <span>En revisión</span>
+          <strong>{committeeQueue}</strong>
+          <small>Comité / Arquitecto</small>
         </article>
         <article className="metric-card">
-          <span>Brechas</span>
-          <strong>{result.policy_gaps.length + result.finops_gaps.length + result.architecture.architecture_gaps.length}</strong>
-          <small>Política + arquitectura + FinOps</small>
+          <span>Aprobadas</span>
+          <strong>{approvedCount}</strong>
+          <small>Listas para scoring</small>
         </article>
         <article className="metric-card">
-          <span>Decisión sugerida</span>
-          <strong>{result.operative_committee.suggested_decision}</strong>
-          <small>Siempre con humano en el loop</small>
+          <span>Eventos</span>
+          <strong>{eventCount}</strong>
+          <small>Trazabilidad registrada</small>
         </article>
       </section>
 
@@ -265,7 +400,9 @@ export default function HomePage() {
             </select>
           </label>
 
-          <button onClick={validateRequest}>Validar y guardar solicitud</button>
+          <button onClick={validateRequest} disabled={mode === "loading"}>
+            {mode === "loading" ? "Validando..." : "Validar y guardar solicitud"}
+          </button>
         </article>
 
         <article className="card result-card">
@@ -297,10 +434,126 @@ export default function HomePage() {
         </article>
       </section>
 
-      <section className="architecture-card card">
+      <section className="card backlog-card">
         <div className="section-title-row">
           <div>
             <p className="eyebrow small">Paso 3</p>
+            <h2>Backlog de demanda gobernada</h2>
+          </div>
+          <button className="secondary-button" onClick={() => void loadBacklog()} disabled={backlogLoading}>
+            {backlogLoading ? "Sincronizando" : "Refrescar backlog"}
+          </button>
+        </div>
+
+        <div className="backlog-cockpit">
+          <div className="backlog-table-wrap">
+            <table className="backlog-table">
+              <thead>
+                <tr>
+                  <th>Solicitud</th>
+                  <th>Estado</th>
+                  <th>Patrón</th>
+                  <th>Brechas</th>
+                  <th>Decisión</th>
+                </tr>
+              </thead>
+              <tbody>
+                {backlog.length ? backlog.map((demand) => (
+                  <tr
+                    key={demand.demand_id}
+                    className={selectedDemand?.demand_id === demand.demand_id ? "active-row" : ""}
+                    onClick={() => setSelectedDemandId(demand.demand_id)}
+                  >
+                    <td>
+                      <strong>{demand.demand_id}</strong>
+                      <small>{demand.request.title}</small>
+                    </td>
+                    <td><Pill tone={statusTone(demand.status)}>{labelize(demand.status)}</Pill></td>
+                    <td>{labelize(demand.architecture.architecture_pattern)}</td>
+                    <td>{demandGapCount(demand)}</td>
+                    <td>{labelize(demand.decision)}</td>
+                  </tr>
+                )) : (
+                  <tr>
+                    <td colSpan={5} className="empty-state">Aún no hay solicitudes registradas. Crea la primera con el formulario de intake.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <aside className="demand-detail">
+            {selectedDemand ? (
+              <>
+                <div className="detail-header">
+                  <div>
+                    <span>Detalle de solicitud</span>
+                    <h3>{selectedDemand.demand_id}</h3>
+                  </div>
+                  <Pill tone={statusTone(selectedDemand.status)}>{labelize(selectedDemand.status)}</Pill>
+                </div>
+                <h4>{selectedDemand.request.title}</h4>
+                <p>{selectedDemand.committee_summary}</p>
+
+                <div className="detail-kv">
+                  <span>Consumo</span><strong>{selectedDemand.request.target_consumption}</strong>
+                  <span>Patrón</span><strong>{labelize(selectedDemand.architecture.architecture_pattern)}</strong>
+                  <span>Decisión</span><strong>{labelize(selectedDemand.decision)}</strong>
+                  <span>Actualizado</span><strong>{formatDate(selectedDemand.updated_at)}</strong>
+                </div>
+
+                <div className="reviewers">
+                  {demandReviewers(selectedDemand).map((reviewer) => (
+                    <Pill key={reviewer} tone={reviewer === "Data Architect" ? "risk" : "neutral"}>{reviewer}</Pill>
+                  ))}
+                </div>
+
+                <div className="action-row">
+                  <button
+                    className="secondary-button ok-action"
+                    disabled={actionLoading}
+                    onClick={() => void updateDemandStatus("approved_for_scoring", "approved_for_scoring", "Validación final aprobada. La solicitud puede pasar a scoring.")}
+                  >
+                    Aprobar a scoring
+                  </button>
+                  <button
+                    className="secondary-button warn-action"
+                    disabled={actionLoading}
+                    onClick={() => void updateDemandStatus("reformulation_required", "reformulation_required", "Se requiere reformulación antes de continuar.")}
+                  >
+                    Reformular
+                  </button>
+                  <button
+                    className="secondary-button risk-action"
+                    disabled={actionLoading}
+                    onClick={() => void updateDemandStatus("rejected", "rejected", "Solicitud rechazada después de revisión del Arquitecto de Datos.")}
+                  >
+                    Rechazar
+                  </button>
+                </div>
+
+                <div className="timeline">
+                  <h4>Trazabilidad</h4>
+                  {selectedDemand.events.slice(-5).reverse().map((event) => (
+                    <div className="timeline-event" key={event.event_id ?? `${event.timestamp}-${event.type}`}>
+                      <strong>{labelize(event.type)}</strong>
+                      <span>{formatDate(event.timestamp)} · {event.actor}</span>
+                      <p>{event.comment}</p>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="empty-detail">Selecciona una solicitud para revisar trazabilidad y acciones de comité.</div>
+            )}
+          </aside>
+        </div>
+      </section>
+
+      <section className="architecture-card card">
+        <div className="section-title-row">
+          <div>
+            <p className="eyebrow small">Paso 4</p>
             <h2>Arquitectura end-to-end validada</h2>
           </div>
           <Pill tone={result.architecture.is_compliant ? "ok" : "warn"}>
