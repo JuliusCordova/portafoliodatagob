@@ -9,6 +9,7 @@ from unittest.mock import patch
 from atlas_datagob.services.demand_backlog import create_demand_record, list_demand_records
 from atlas_datagob.services.persistence_config import (
     DEFAULT_REPOSITORY_ADAPTER,
+    FIRESTORE_REPOSITORY_ADAPTER,
     persistence_configuration_snapshot,
     validate_persistence_configuration,
 )
@@ -48,8 +49,23 @@ class PersistenceConfigurationTest(unittest.TestCase):
         self.assertEqual("data/demo/demand_backlog_seed.json", snapshot["demo_seed_path"])
         self.assertIn(DEFAULT_REPOSITORY_ADAPTER, snapshot["supported_repository_adapters"])
 
+    def test_firestore_persistence_configuration_is_supported(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "ATLAS_DEMAND_REPOSITORY": FIRESTORE_REPOSITORY_ADAPTER,
+                "ATLAS_FIRESTORE_COLLECTION": "atlas_test_demands",
+            },
+            clear=True,
+        ):
+            snapshot = persistence_configuration_snapshot()
+
+        self.assertEqual(FIRESTORE_REPOSITORY_ADAPTER, snapshot["repository_adapter"])
+        self.assertEqual("atlas_test_demands", snapshot["firestore_collection"])
+        self.assertIn(FIRESTORE_REPOSITORY_ADAPTER, snapshot["supported_repository_adapters"])
+
     def test_invalid_repository_adapter_fails_fast(self) -> None:
-        with patch.dict(os.environ, {"ATLAS_DEMAND_REPOSITORY": "firestore"}, clear=True):
+        with patch.dict(os.environ, {"ATLAS_DEMAND_REPOSITORY": "unsupported_store"}, clear=True):
             with self.assertRaises(ValueError):
                 validate_persistence_configuration()
 
