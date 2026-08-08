@@ -44,12 +44,21 @@ def _allowed_origins() -> list[str]:
     return [origin.strip() for origin in raw.split(",") if origin.strip()]
 
 
+def _allowed_origin_regex() -> str:
+    """Allow local web previews such as Google Cloud Shell during development."""
+    return os.getenv(
+        "ATLAS_ALLOWED_ORIGIN_REGEX",
+        r"https://.*\.cloudshell\.dev",
+    )
+
+
 if FastAPI:
-    app = FastAPI(title="ATLAS DataGob API", version="0.4.0")
+    app = FastAPI(title="ATLAS DataGob API", version="0.4.1")
 
     app.add_middleware(
         CORSMiddleware,
         allow_origins=_allowed_origins(),
+        allow_origin_regex=_allowed_origin_regex(),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -75,7 +84,7 @@ if FastAPI:
 
     @app.get("/health")
     def health() -> dict:
-        return {"status": "ok", "product": "ATLAS DataGob", "version": "0.4.0"}
+        return {"status": "ok", "product": "ATLAS DataGob", "version": "0.4.1"}
 
     @app.post("/intake/classify")
     def classify(payload: DemandPayload) -> dict:
@@ -114,7 +123,7 @@ if FastAPI:
             raise HTTPException(status_code=404, detail="Domain catalog not found")
         domains = load_domains(DOMAINS_PATH)
         return {
-            "version": "0.4.0",
+            "version": "0.4.1",
             "domains": [
                 {
                     "domain_id": domain.domain_id,
