@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { atlasJsonProxyHeaders } from "../../_lib/identity";
+import { atlasJsonProxyHeaders, resolveWebSession } from "../../_lib/identity";
 
 type CommitteeDecisionPayload = {
   demand_id?: string;
@@ -19,14 +19,34 @@ const FINAL_STATUS_BY_DECISION: Record<string, string> = {
   architecture_exception: "operative_committee_review"
 };
 
+const COMMITTEE_DECISION_ROLES = new Set(["committee_member", "data_architect", "platform_admin"]);
+
 function normalizeDecision(value: string | undefined) {
   return (value ?? "").trim().toLowerCase();
+}
+
+function canRecordCommitteeDecision(roles: string[]) {
+  return roles.some((role) => COMMITTEE_DECISION_ROLES.has(role));
 }
 
 export async function PATCH(request: Request) {
   const backendBaseUrl = process.env.ATLAS_INTERNAL_API_BASE ?? "http://localhost:8000";
 
   try {
+    const session = resolveWebSession(request);
+    if (!canRecordCommitteeDecision(session.roles)) {
+      return NextResponse.json(
+        {
+          error: "ATLAS_COMMITTEE_DECISION_FORBIDDEN",
+          message: "Committee decisions require committee_member, data_architect or platform_admin role.",
+          user: session.user,
+          roles: session.roles,
+          required_roles: Array.from(COMMITTEE_DECISION_ROLES).sort()
+        },
+        { status: 403 }
+      );
+    }
+
     const payload = (await request.json()) as CommitteeDecisionPayload;
     const demandId = payload.demand_id?.trim();
     const finalDecision = normalizeDecision(payload.final_decision);
@@ -44,7 +64,7 @@ export async function PATCH(request: Request) {
     }
 
     const now = new Date().toISOString();
-    const actor = payload.actor?.trim() || "Comité Operativo";
+    const actor = payload.actor?.trim() || session.user || "Comité Operativo";
     const reason = payload.reason?.trim() || "Decisión registrada por el Comité Operativo.";
     const recommendation = payload.recommendation?.trim() || "pending_committee_recommendation";
     const decisionEnvelope = {
@@ -55,8 +75,10 @@ export async function PATCH(request: Request) {
       committee_conditions: payload.conditions?.trim() || "",
       committee_risk_level: payload.risk_level?.trim() || "medium",
       architecture_exception_requested: Boolean(payload.architecture_exception || finalDecision === "architecture_exception"),
+      committee_decision_recorded_by: session.user,
+      committee_decision_recorded_roles: session.roles,
       committee_decision_recorded_at: now,
-      committee_decision_version: "committee-decision-v1.0"
+      committee_decision_version: "committee-decision-v1.1"
     };
 
     const updateResponse = await fetch(`${backendBaseUrl}/demands/${encodeURIComponent(demandId)}`, {
@@ -67,7 +89,8 @@ export async function PATCH(request: Request) {
         validation_state: {
           committee_decision_recorded: true,
           committee_decision_recorded_at: now,
-          committee_final_status: finalStatus
+          committee_final_status: finalStatus,
+          committee_actor_roles: session.roles
         },
         decision: finalDecision,
         actor,
