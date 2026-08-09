@@ -1,0 +1,35 @@
+{
+  "results": [
+    {
+      "name": "api_health",
+      "ok": true,
+      "detail": "API health ok, version=0.6.4"
+    },
+    {
+      "name": "api_demo_cases",
+      "ok": true,
+      "detail": "API demo cases reachable, count=10"
+    },
+    {
+      "name": "web_root",
+      "ok": true,
+      "detail": "Web root reachable"
+    },
+    {
+      "name": "web_session",
+      "ok": true,
+      "detail": "Web session reachable, mode=static, user=demo.operator@atlas.local"
+    },
+    {
+      "name": "web_proxy_cases",
+      "ok": true,
+      "detail": "Web proxy to API reachable, count=10"
+    },
+    {
+      "name": "web_proxy_demo_reset",
+      "ok": true,
+      "detail": "skipped; set ATLAS_SMOKE_ALLOW_DEMO_RESET=true to execute"
+    }
+  ],
+  "failed": 0
+}
