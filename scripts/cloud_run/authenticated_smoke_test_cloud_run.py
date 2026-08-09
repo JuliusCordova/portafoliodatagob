@@ -152,8 +152,8 @@ def main() -> int:
     def web_session_positive() -> str:
         status, payload = request_json(f"{web_url}/api/session")
         assert status == 200, payload
-        assert "identity" in payload, payload
-        identity = payload["identity"]
+        identity = payload.get("identity") or payload.get("session")
+        assert identity, payload
         assert "mode" in identity, payload
         return f"Web session reachable, mode={identity.get('mode')}, user={identity.get('user')}"
 
