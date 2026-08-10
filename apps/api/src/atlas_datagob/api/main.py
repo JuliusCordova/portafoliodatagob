@@ -126,7 +126,7 @@ if FastAPI:
         request_update: dict[str, Any] | None = None
         business_inputs: dict[str, Any] | None = None
         committee_inputs: dict[str, Any] | None = None
-        validation_state: str | None = None
+        validation_state: dict[str, Any] | str | None = None
         decision: str | None = None
         actor: str = "Data Steward"
         comment: str | None = None
