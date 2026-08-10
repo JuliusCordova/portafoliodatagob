@@ -85,10 +85,63 @@ type BacklogResponse = { count: number; demands: DemandRecord[] };
 type RuntimeMode = "demo" | "api" | "error" | "loading";
 type ActiveView = "intake" | "committee" | "executive";
 type PillTone = "neutral" | "ok" | "warn" | "risk" | "dark";
-type PriorityLabel = "Alta" | "Media" | "Baja";
+type PriorityLabel = "Alta" | "Media" | "Backlog" | "Reformular" | "Pendiente";
+type ScoreScaleKey = "impact" | "alignment" | "data" | "technical" | "effort" | "risk" | "reuse";
 
 const benchmarkScore = 4.0;
 const numberOptions = [1, 2, 3, 4, 5];
+
+const scoreOptionLabels: Record<ScoreScaleKey, Record<number, string>> = {
+  impact: {
+    1: "Muy bajo",
+    2: "Bajo",
+    3: "Medio",
+    4: "Alto",
+    5: "Muy alto"
+  },
+  alignment: {
+    1: "Sin alineamiento",
+    2: "Alineamiento bajo",
+    3: "Alineamiento parcial",
+    4: "Alineamiento alto",
+    5: "Prioridad estratégica"
+  },
+  data: {
+    1: "Datos no disponibles",
+    2: "Parciales / baja calidad",
+    3: "Disponibles · requieren validación",
+    4: "Trazables / buena calidad",
+    5: "Gobernados y listos"
+  },
+  technical: {
+    1: "No viable",
+    2: "Viabilidad baja",
+    3: "Viabilidad media",
+    4: "Viabilidad alta",
+    5: "Altamente viable"
+  },
+  effort: {
+    1: "Muy alto · > 6 meses",
+    2: "Alto · 3 a 6 meses",
+    3: "Medio · 6 a 12 semanas",
+    4: "Bajo · 4 a 6 semanas",
+    5: "Quick win · < 4 semanas"
+  },
+  risk: {
+    1: "Alto · no mitigado",
+    2: "Relevante · controles débiles",
+    3: "Medio · mitigable",
+    4: "Bajo · controles definidos",
+    5: "Muy bajo · controles listos"
+  },
+  reuse: {
+    1: "Muy baja",
+    2: "Baja",
+    3: "Media",
+    4: "Alta",
+    5: "Muy alta"
+  }
+};
 
 const defaultResult: ValidationResult = {
   classification: {
@@ -138,15 +191,28 @@ function EmptyState({ title, copy }: { title: string; copy: string }) {
   );
 }
 
-function SelectScore({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) {
+function SelectScore({
+  label,
+  value,
+  onChange,
+  scale
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+  scale: ScoreScaleKey;
+}) {
   return (
     <label>
       {label}
       <select value={value} onChange={(event) => onChange(Number(event.target.value))}>
         {numberOptions.map((item) => (
-          <option key={item} value={item}>{item}</option>
+          <option key={item} value={item}>
+            {item} · {scoreOptionLabels[scale][item]}
+          </option>
         ))}
       </select>
+      <small>{scoreOptionLabels[scale][value]}</small>
     </label>
   );
 }
@@ -213,23 +279,26 @@ function readinessFromDemand(demand: DemandRecord) {
   return Math.max(25, 100 - gapCount(demand) * 12);
 }
 
-function scoreFromDemand(demand: DemandRecord) {
-  if (typeof demand.scoring?.score === "number") return demand.scoring.score;
-  return Math.max(1, Math.min(5, readinessFromDemand(demand) / 20));
+function scoreFromDemand(demand: DemandRecord): number | null {
+  return typeof demand.scoring?.score === "number" ? demand.scoring.score : null;
 }
 
 function priorityFromDemand(demand: DemandRecord): PriorityLabel {
   const explicit = demand.scoring?.priority;
-  if (explicit === "Alta" || explicit === "Media" || explicit === "Baja") return explicit;
-  const score = scoreFromDemand(demand);
-  if (score >= 4) return "Alta";
-  if (score >= 3) return "Media";
-  return "Baja";
+  if (explicit === "Alta" || explicit === "Media" || explicit === "Backlog" || explicit === "Reformular") {
+    return explicit;
+  }
+
+  // Compatibilidad visual con registros creados por el modelo anterior.
+  if (explicit === "Baja") return "Backlog";
+
+  return "Pendiente";
 }
 
 function priorityTone(priority: PriorityLabel): PillTone {
   if (priority === "Alta") return "risk";
   if (priority === "Media") return "warn";
+  if (priority === "Reformular") return "risk";
   return "neutral";
 }
 
@@ -327,26 +396,93 @@ export default function HomePage() {
 
   const metrics = useMemo(() => {
     const total = backlog.length;
-    const scores = backlog.map(scoreFromDemand);
-    const averageScore = scores.length ? scores.reduce((sum, score) => sum + score, 0) / scores.length : 0;
+    const scores = backlog
+      .map(scoreFromDemand)
+      .filter((score): score is number => score !== null);
+
+    const averageScore = scores.length
+      ? scores.reduce((sum, score) => sum + score, 0) / scores.length
+      : 0;
+
     const high = backlog.filter((item) => priorityFromDemand(item) === "Alta").length;
     const medium = backlog.filter((item) => priorityFromDemand(item) === "Media").length;
-    const low = backlog.filter((item) => priorityFromDemand(item) === "Baja").length;
+    const backlogPriority = backlog.filter((item) => priorityFromDemand(item) === "Backlog").length;
+    const reformulate = backlog.filter((item) => priorityFromDemand(item) === "Reformular").length;
+    const pending = backlog.filter((item) => priorityFromDemand(item) === "Pendiente").length;
     const review = backlog.filter((item) => item.status.includes("review")).length;
-    const scored = backlog.filter((item) => item.status.includes("scored")).length;
+    const scored = scores.length;
     const events = backlog.reduce((sum, item) => sum + item.events.length, 0);
     const policyGaps = backlog.reduce((sum, item) => sum + item.policy_gaps.length, 0);
     const architectureGaps = backlog.reduce((sum, item) => sum + item.architecture_gaps.length, 0);
     const finopsGaps = backlog.reduce((sum, item) => sum + item.finops_gaps.length, 0);
-    const van = backlog.reduce((sum, item) => sum + (typeof item.financials?.van_usd === "number" ? item.financials.van_usd : 0), 0);
-    return { total, averageScore, high, medium, low, review, scored, events, policyGaps, architectureGaps, finopsGaps, van };
+    const van = backlog.reduce(
+      (sum, item) => sum + (typeof item.financials?.van_usd === "number" ? item.financials.van_usd : 0),
+      0
+    );
+
+    return {
+      total,
+      averageScore,
+      high,
+      medium,
+      backlogPriority,
+      reformulate,
+      pending,
+      review,
+      scored,
+      events,
+      policyGaps,
+      architectureGaps,
+      finopsGaps,
+      van
+    };
   }, [backlog]);
 
-  const topCases = useMemo(() => [...backlog].sort((left, right) => scoreFromDemand(right) - scoreFromDemand(left)).slice(0, 5), [backlog]);
+  const topCases = useMemo(
+    () =>
+      [...backlog]
+        .filter((item) => scoreFromDemand(item) !== null)
+        .sort((left, right) => (scoreFromDemand(right) ?? 0) - (scoreFromDemand(left) ?? 0))
+        .slice(0, 5),
+    [backlog]
+  );
 
   const ownerChecklistComplete = title.length > 2 && description.length > 10 && operationalJustification.length > 10 && strategicImpactJustification.length > 10 && strategicAlignmentJustification.length > 10;
   const drawerOwnerComplete = editOperationalJustification.length > 10 && editStrategicImpactJustification.length > 10 && editStrategicAlignmentJustification.length > 10;
   const drawerCommitteeComplete = editDataReadinessJustification.length > 10 && editTechnicalFeasibilityJustification.length > 10 && editExecutionEffortJustification.length > 10 && editRiskControlJustification.length > 10 && editReusePotentialJustification.length > 10;
+
+  const scorePreview = useMemo(() => {
+    const businessValue = Math.round((editOperationalImpact + editStrategicImpact) / 2);
+
+    const components = [
+      { key: "business_value", label: "Valor de negocio", value: businessValue, weight: 0.30 },
+      { key: "strategic_alignment", label: "Alineamiento estratégico", value: editStrategicAlignment, weight: 0.20 },
+      { key: "data_readiness", label: "Disponibilidad / calidad de datos", value: editDataReadiness, weight: 0.15 },
+      { key: "technical_feasibility", label: "Viabilidad técnica", value: editTechnicalFeasibility, weight: 0.15 },
+      { key: "execution_effort", label: "Esfuerzo / time to market", value: editExecutionEffort, weight: 0.10 },
+      { key: "risk_control", label: "Riesgo / cumplimiento", value: editRiskControl, weight: 0.10 }
+    ];
+
+    const score = Math.round(
+      components.reduce((sum, component) => sum + component.value * component.weight, 0) * 100
+    ) / 100;
+
+    let priority: PriorityLabel;
+    if (score >= 4.0) priority = "Alta";
+    else if (score >= 3.2) priority = "Media";
+    else if (score >= 2.5) priority = "Backlog";
+    else priority = "Reformular";
+
+    return { businessValue, components, score, priority };
+  }, [
+    editOperationalImpact,
+    editStrategicImpact,
+    editStrategicAlignment,
+    editDataReadiness,
+    editTechnicalFeasibility,
+    editExecutionEffort,
+    editRiskControl
+  ]);
 
   async function loadBacklog(highlightDemandId?: string) {
     try {
@@ -534,8 +670,7 @@ export default function HomePage() {
       setActionLoading(true);
       setEditMessage("Guardando validación y calculando score...");
       await saveEditor();
-      const businessValue = Math.round((editOperationalImpact + editStrategicImpact) / 2);
-      const governanceRisk = Math.max(1, Math.min(5, 6 - editRiskControl));
+      const businessValue = scorePreview.businessValue;
       const response = await fetch("/api/demands/score", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -543,9 +678,7 @@ export default function HomePage() {
           demand_id: selectedDemand.demand_id,
           strategic_alignment: editStrategicAlignment,
           business_value: businessValue,
-          urgency: editOperationalImpact,
           data_readiness: editDataReadiness,
-          governance_risk: governanceRisk,
           technical_feasibility: editTechnicalFeasibility,
           roi_percent: editRoiPercent,
           van_usd: editVanUsd,
@@ -667,9 +800,9 @@ export default function HomePage() {
               <Pill tone="dark">No lo llena el Comité</Pill>
             </div>
             <div className="form-grid two">
-              <SelectScore label="Impacto operativo" value={operationalImpact} onChange={setOperationalImpact} />
-              <SelectScore label="Impacto estratégico" value={strategicImpact} onChange={setStrategicImpact} />
-              <SelectScore label="Alineamiento estratégico" value={strategicAlignment} onChange={setStrategicAlignment} />
+              <SelectScore scale="impact" label="Impacto operativo" value={operationalImpact} onChange={setOperationalImpact} />
+              <SelectScore scale="impact" label="Impacto estratégico" value={strategicImpact} onChange={setStrategicImpact} />
+              <SelectScore scale="alignment" label="Alineamiento estratégico" value={strategicAlignment} onChange={setStrategicAlignment} />
               <NumericField label="ROI estimado" value={roiPercent} onChange={setRoiPercent} suffix="%" />
               <NumericField label="VAN estimado" value={vanUsd} onChange={setVanUsd} suffix="USD" />
               <NumericField label="TIR estimada" value={tirPercent} onChange={setTirPercent} suffix="%" />
@@ -698,7 +831,7 @@ export default function HomePage() {
               <select value={filterArea} onChange={(event) => setFilterArea(event.target.value)}>{areas.map((item) => <option key={item}>{item}</option>)}</select>
               <select value={filterDomain} onChange={(event) => setFilterDomain(event.target.value)}>{domains.map((item) => <option key={item}>{item}</option>)}</select>
               <select value={filterStatus} onChange={(event) => setFilterStatus(event.target.value)}>{statuses.map((item) => <option key={item}>{labelize(item)}</option>)}</select>
-              <select value={filterPriority} onChange={(event) => setFilterPriority(event.target.value)}><option>Todas</option><option>Alta</option><option>Media</option><option>Baja</option></select>
+              <select value={filterPriority} onChange={(event) => setFilterPriority(event.target.value)}><option>Todas</option><option>Alta</option><option>Media</option><option>Backlog</option><option>Reformular</option><option>Pendiente</option></select>
             </div>
             {filteredBacklog.length === 0 ? (
               <EmptyState title="Sin demandas para esos filtros" copy="Registra una solicitud desde el intake o ajusta los filtros de la grilla." />
@@ -709,6 +842,7 @@ export default function HomePage() {
                   <tbody>
                     {filteredBacklog.map((item) => {
                       const priority = priorityFromDemand(item);
+                      const score = scoreFromDemand(item);
                       return (
                         <tr key={item.demand_id} className={selectedDemandId === item.demand_id ? "selected" : ""}>
                           <td><button className="link-button" onClick={() => openEditor(item)}>{item.demand_id}</button></td>
@@ -717,7 +851,7 @@ export default function HomePage() {
                           <td>{item.request.domain_hint || "No definido"}</td>
                           <td><Pill tone={statusTone(item.status)}>{labelize(item.status)}</Pill></td>
                           <td><Pill tone={priorityTone(priority)}>{priority}</Pill></td>
-                          <td>{scoreFromDemand(item).toFixed(2)}</td>
+                          <td>{score === null ? "Pendiente" : score.toFixed(2)}</td>
                           <td>{formatCurrency(item.financials?.van_usd)}</td>
                           <td><button className="secondary-action small" onClick={() => openEditor(item)}>Editar / validar</button></td>
                         </tr>
@@ -743,7 +877,7 @@ export default function HomePage() {
               <div className="drawer-body">
                 <div className="drawer-status">
                   <Pill tone={drawerOwnerComplete ? "ok" : "warn"}>Data Owner {drawerOwnerComplete ? "validado" : "pendiente"}</Pill>
-                  <Pill tone={drawerCommitteeComplete ? "ok" : "warn"}>Comité {drawerCommitteeComplete ? "completo" : "pendiente"}</Pill>
+                  <Pill tone={drawerCommitteeComplete ? "ok" : "warn"}>Inputs Comité {drawerCommitteeComplete ? "completos" : "pendientes"}</Pill>
                 </div>
                 <p className="drawer-message">{editMessage}</p>
 
@@ -755,9 +889,9 @@ export default function HomePage() {
                 <section className="drawer-section">
                   <h3>2. Validar Data Owner</h3>
                   <div className="form-grid two">
-                    <SelectScore label="Impacto operativo" value={editOperationalImpact} onChange={setEditOperationalImpact} />
-                    <SelectScore label="Impacto estratégico" value={editStrategicImpact} onChange={setEditStrategicImpact} />
-                    <SelectScore label="Alineamiento estratégico" value={editStrategicAlignment} onChange={setEditStrategicAlignment} />
+                    <SelectScore scale="impact" label="Impacto operativo" value={editOperationalImpact} onChange={setEditOperationalImpact} />
+                    <SelectScore scale="impact" label="Impacto estratégico" value={editStrategicImpact} onChange={setEditStrategicImpact} />
+                    <SelectScore scale="alignment" label="Alineamiento estratégico" value={editStrategicAlignment} onChange={setEditStrategicAlignment} />
                     <NumericField label="ROI" value={editRoiPercent} onChange={setEditRoiPercent} suffix="%" />
                     <NumericField label="VAN" value={editVanUsd} onChange={setEditVanUsd} suffix="USD" />
                     <NumericField label="TIR" value={editTirPercent} onChange={setEditTirPercent} suffix="%" />
@@ -771,17 +905,75 @@ export default function HomePage() {
                 <section className="drawer-section">
                   <h3>3. Completar Comité Operativo</h3>
                   <div className="form-grid two">
-                    <SelectScore label="Disponibilidad/calidad de datos" value={editDataReadiness} onChange={setEditDataReadiness} />
-                    <SelectScore label="Viabilidad técnica" value={editTechnicalFeasibility} onChange={setEditTechnicalFeasibility} />
-                    <SelectScore label="Esfuerzo de ejecución" value={editExecutionEffort} onChange={setEditExecutionEffort} />
-                    <SelectScore label="Riesgo/control" value={editRiskControl} onChange={setEditRiskControl} />
-                    <SelectScore label="Reutilización" value={editReusePotential} onChange={setEditReusePotential} />
+                    <SelectScore scale="data" label="Disponibilidad/calidad de datos" value={editDataReadiness} onChange={setEditDataReadiness} />
+                    <SelectScore scale="technical" label="Viabilidad técnica" value={editTechnicalFeasibility} onChange={setEditTechnicalFeasibility} />
+                    <SelectScore scale="effort" label="Esfuerzo de ejecución" value={editExecutionEffort} onChange={setEditExecutionEffort} />
+                    <SelectScore scale="risk" label="Riesgo/control" value={editRiskControl} onChange={setEditRiskControl} />
+                    <SelectScore scale="reuse" label="Reutilización" value={editReusePotential} onChange={setEditReusePotential} />
                   </div>
                   <label>Justificación datos<textarea rows={3} value={editDataReadinessJustification} onChange={(event) => setEditDataReadinessJustification(event.target.value)} /></label>
                   <label>Justificación viabilidad<textarea rows={3} value={editTechnicalFeasibilityJustification} onChange={(event) => setEditTechnicalFeasibilityJustification(event.target.value)} /></label>
                   <label>Justificación esfuerzo<textarea rows={3} value={editExecutionEffortJustification} onChange={(event) => setEditExecutionEffortJustification(event.target.value)} /></label>
                   <label>Justificación riesgo/control<textarea rows={3} value={editRiskControlJustification} onChange={(event) => setEditRiskControlJustification(event.target.value)} /></label>
                   <label>Justificación reutilización<textarea rows={3} value={editReusePotentialJustification} onChange={(event) => setEditReusePotentialJustification(event.target.value)} /></label>
+                </section>
+
+                <section className="drawer-section">
+                  <div className="section-title-row">
+                    <div>
+                      <p className="eyebrow small">Vista previa · no persistida</p>
+                      <h3>Score preliminar</h3>
+                    </div>
+                    <Pill tone={priorityTone(scorePreview.priority)}>{scorePreview.priority}</Pill>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr auto",
+                      gap: 12,
+                      alignItems: "center",
+                      padding: 16,
+                      borderRadius: 16,
+                      background: "#f8fafc",
+                      border: "1px solid #e4e7ec",
+                      marginBottom: 14
+                    }}
+                  >
+                    <div>
+                      <strong style={{ display: "block", fontSize: 30 }}>
+                        {scorePreview.score.toFixed(2)} / 5
+                      </strong>
+                      <small>Se actualiza mientras cambias los criterios.</small>
+                    </div>
+                    <strong>{scorePreview.priority}</strong>
+                  </div>
+
+                  <div style={{ display: "grid", gap: 8 }}>
+                    {scorePreview.components.map((component) => (
+                      <div
+                        key={component.key}
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr auto auto",
+                          gap: 12,
+                          alignItems: "center",
+                          padding: "8px 0",
+                          borderBottom: "1px solid #eaecf0"
+                        }}
+                      >
+                        <span>{component.label}</span>
+                        <small>{Math.round(component.weight * 100)}%</small>
+                        <strong>{(component.value * component.weight).toFixed(2)}</strong>
+                      </div>
+                    ))}
+                  </div>
+
+                  <small style={{ display: "block", marginTop: 12 }}>
+                    Valor de negocio = promedio redondeado de impacto operativo e impacto estratégico.
+                    Reutilización se registra como evidencia del Comité, pero no pondera el score MVP.
+                    El valor se persiste únicamente al pulsar “Recalcular score”.
+                  </small>
                 </section>
 
                 <div className="drawer-actions">
@@ -818,7 +1010,7 @@ export default function HomePage() {
               <div className="rank-list">
                 {topCases.map((item, index) => {
                   const priority = priorityFromDemand(item);
-                  return <button key={item.demand_id} className="rank-row" onClick={() => { setActiveView("committee"); openEditor(item); }}><span>#{index + 1}</span><strong>{item.request.title}</strong><Pill tone={priorityTone(priority)}>{priority}</Pill><em>{scoreFromDemand(item).toFixed(2)}</em><small>{formatCurrency(item.financials?.van_usd)}</small></button>;
+                  return <button key={item.demand_id} className="rank-row" onClick={() => { setActiveView("committee"); openEditor(item); }}><span>#{index + 1}</span><strong>{item.request.title}</strong><Pill tone={priorityTone(priority)}>{priority}</Pill><em>{(scoreFromDemand(item) ?? 0).toFixed(2)}</em><small>{formatCurrency(item.financials?.van_usd)}</small></button>;
                 })}
               </div>
             )}
@@ -826,7 +1018,13 @@ export default function HomePage() {
           <article className="card">
             <div className="section-title-row"><div><p className="eyebrow small">Distribución</p><h2>Prioridad y brechas</h2></div></div>
             <div className="bars-grid">
-              {[{ label: "Alta", value: metrics.high }, { label: "Media", value: metrics.medium }, { label: "Baja", value: metrics.low }].map((item) => <div key={item.label} className="bar-item"><span>{item.label}</span><div><i style={{ width: `${percentage(item.value, metrics.total)}%` }} /></div><strong>{item.value}</strong></div>)}
+              {[
+                { label: "Alta", value: metrics.high },
+                { label: "Media", value: metrics.medium },
+                { label: "Backlog", value: metrics.backlogPriority },
+                { label: "Reformular", value: metrics.reformulate },
+                { label: "Pendiente", value: metrics.pending }
+              ].map((item) => <div key={item.label} className="bar-item"><span>{item.label}</span><div><i style={{ width: `${percentage(item.value, metrics.total)}%` }} /></div><strong>{item.value}</strong></div>)}
               {[{ label: "Política", value: metrics.policyGaps }, { label: "Arquitectura", value: metrics.architectureGaps }, { label: "FinOps", value: metrics.finopsGaps }].map((item) => <div key={item.label} className="bar-item"><span>{item.label}</span><div><i style={{ width: `${Math.min(100, item.value * 12)}%` }} /></div><strong>{item.value}</strong></div>)}
             </div>
           </article>
