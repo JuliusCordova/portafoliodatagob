@@ -317,8 +317,6 @@ if FastAPI:
                             tir_percent=payload.tir_percent,
                             payback_years=payload.payback_years,
                         ),
-                        business_inputs=business_inputs,
-                        committee_inputs=committee_inputs,
                     )
                 )
             else:
@@ -336,8 +334,6 @@ if FastAPI:
                             time_horizon_years=payload.time_horizon_years,
                             discount_rate=payload.discount_rate,
                         ),
-                        business_inputs=business_inputs,
-                        committee_inputs=committee_inputs,
                     )
                 )
             record = update_demand_record_scoring(
