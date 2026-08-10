@@ -19,5 +19,37 @@ class ApiContractFilesTest(unittest.TestCase):
         self.assertIn("PolicyArchitectureValidationResult", content)
 
 
+    def test_scoring_contract_matches_mvp_spec(self) -> None:
+        contract_path = ROOT / "docs" / "api" / "openapi.yaml"
+        content = contract_path.read_text(encoding="utf-8")
+
+        scoring_payload = (
+            content
+            .split("    ScoringPayload:", 1)[1]
+            .split("    ScoringResult:", 1)[0]
+        )
+
+        required_fields = [
+            "business_value",
+            "strategic_alignment",
+            "data_readiness",
+            "technical_feasibility",
+            "execution_effort",
+            "risk_control",
+        ]
+
+        for field in required_fields:
+            self.assertIn(f"{field}:", scoring_payload)
+
+        self.assertNotIn("urgency:", scoring_payload)
+        self.assertNotIn("governance_risk:", scoring_payload)
+
+        scoring_result = content.split("    ScoringResult:", 1)[1]
+        self.assertIn(
+            "enum: [Alta, Media, Backlog, Reformular]",
+            scoring_result,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

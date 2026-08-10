@@ -29,12 +29,12 @@ class ClassificationResult:
 
 @dataclass(frozen=True)
 class ScoringInput:
-    strategic_alignment: int
     business_value: int
-    urgency: int
+    strategic_alignment: int
     data_readiness: int
-    governance_risk: int
     technical_feasibility: int
+    execution_effort: int
+    risk_control: int
 
 
 @dataclass(frozen=True)

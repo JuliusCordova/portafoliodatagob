@@ -38,9 +38,9 @@ class FinancialScoringTest(unittest.TestCase):
                 scoring=ScoringInput(
                     strategic_alignment=5,
                     business_value=5,
-                    urgency=4,
+                    execution_effort=4,
                     data_readiness=4,
-                    governance_risk=2,
+                    risk_control=4,
                     technical_feasibility=4,
                 ),
                 financials=FinancialAssumptions(
@@ -91,9 +91,9 @@ class FinancialScoringTest(unittest.TestCase):
                     scoring=ScoringInput(
                         strategic_alignment=5,
                         business_value=5,
-                        urgency=4,
+                        execution_effort=4,
                         data_readiness=4,
-                        governance_risk=2,
+                        risk_control=4,
                         technical_feasibility=4,
                     ),
                     financials=FinancialAssumptions(
