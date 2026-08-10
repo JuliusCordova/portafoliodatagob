@@ -132,12 +132,12 @@ if FastAPI:
         comment: str | None = None
 
     class ScoringPayload(BaseModel):
-        strategic_alignment: int = Field(ge=1, le=5)
         business_value: int = Field(ge=1, le=5)
-        urgency: int = Field(ge=1, le=5)
+        strategic_alignment: int = Field(ge=1, le=5)
         data_readiness: int = Field(ge=1, le=5)
-        governance_risk: int = Field(ge=1, le=5)
         technical_feasibility: int = Field(ge=1, le=5)
+        execution_effort: int = Field(ge=1, le=5)
+        risk_control: int = Field(ge=1, le=5)
 
     class DemandFinancialScoringPayload(ScoringPayload):
         # Data Owner direct financial metrics.
@@ -156,9 +156,7 @@ if FastAPI:
         # Committee technical/governance checklist.
         data_readiness_justification: str | None = None
         technical_feasibility_justification: str | None = None
-        execution_effort: int | None = Field(default=None, ge=1, le=5)
         execution_effort_justification: str | None = None
-        risk_control: int | None = Field(default=None, ge=1, le=5)
         risk_control_justification: str | None = None
         reuse_potential: int | None = Field(default=None, ge=1, le=5)
         reuse_potential_justification: str | None = None
@@ -281,12 +279,12 @@ if FastAPI:
     def demand_score_update(demand_id: str, payload: DemandFinancialScoringPayload) -> dict:
         try:
             scoring_input = ScoringInput(
-                strategic_alignment=payload.strategic_alignment,
                 business_value=payload.business_value,
-                urgency=payload.urgency,
+                strategic_alignment=payload.strategic_alignment,
                 data_readiness=payload.data_readiness,
-                governance_risk=payload.governance_risk,
                 technical_feasibility=payload.technical_feasibility,
+                execution_effort=payload.execution_effort,
+                risk_control=payload.risk_control,
             )
 
             business_inputs = {
@@ -317,8 +315,6 @@ if FastAPI:
                             tir_percent=payload.tir_percent,
                             payback_years=payload.payback_years,
                         ),
-                        business_inputs=business_inputs,
-                        committee_inputs=committee_inputs,
                     )
                 )
             else:
@@ -336,8 +332,6 @@ if FastAPI:
                             time_horizon_years=payload.time_horizon_years,
                             discount_rate=payload.discount_rate,
                         ),
-                        business_inputs=business_inputs,
-                        committee_inputs=committee_inputs,
                     )
                 )
             record = update_demand_record_scoring(
