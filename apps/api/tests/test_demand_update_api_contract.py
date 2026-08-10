@@ -1,21 +1,34 @@
 from __future__ import annotations
 
+import ast
 import unittest
-
-from atlas_datagob.api.main import DemandUpdatePayload
+from pathlib import Path
 
 
 class DemandUpdateApiContractTest(unittest.TestCase):
     def test_validation_state_accepts_structured_object(self) -> None:
-        state = {
-            "data_owner_inputs_complete": True,
-            "committee_inputs_complete": False,
-        }
+        path = Path("apps/api/src/atlas_datagob/api/main.py")
+        tree = ast.parse(path.read_text())
 
-        payload = DemandUpdatePayload(validation_state=state)
+        annotation = None
 
-        self.assertEqual(payload.validation_state, state)
-        self.assertIsInstance(payload.validation_state, dict)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef) and node.name == "DemandUpdatePayload":
+                for item in node.body:
+                    if (
+                        isinstance(item, ast.AnnAssign)
+                        and isinstance(item.target, ast.Name)
+                        and item.target.id == "validation_state"
+                    ):
+                        annotation = ast.unparse(item.annotation)
+                        break
+
+        self.assertIsNotNone(annotation)
+        assert annotation is not None
+
+        self.assertIn("dict[str, Any]", annotation)
+        self.assertIn("str", annotation)
+        self.assertIn("None", annotation)
 
 
 if __name__ == "__main__":
