@@ -1,0 +1,40 @@
+{
+  "results": [
+    {
+      "name": "api_permissions_positive",
+      "ok": true,
+      "detail": "API permissions reachable with allowed identity"
+    },
+    {
+      "name": "api_operational_readiness_positive",
+      "ok": true,
+      "detail": "Operational readiness reachable, status=warning, total_demands=10"
+    },
+    {
+      "name": "api_demo_cases_positive",
+      "ok": true,
+      "detail": "Allowed identity can read demo cases, count=10"
+    },
+    {
+      "name": "api_demo_reset_negative",
+      "ok": true,
+      "detail": "Denied identity correctly blocked from demo reset with HTTP 403"
+    },
+    {
+      "name": "web_session_positive",
+      "ok": true,
+      "detail": "Web session reachable, mode=static, user=demo.operator@atlas.local"
+    },
+    {
+      "name": "web_proxy_cases_positive",
+      "ok": true,
+      "detail": "Web proxy can read demo cases with propagated identity, count=10"
+    },
+    {
+      "name": "web_proxy_demo_reset_positive",
+      "ok": true,
+      "detail": "skipped; set ATLAS_AUTH_SMOKE_ALLOW_DEMO_RESET=true to execute mutating reset"
+    }
+  ],
+  "failed": 0
+}
