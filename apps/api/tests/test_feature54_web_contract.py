@@ -51,9 +51,10 @@ class Feature54WebContractTest(unittest.TestCase):
         self.assertIn("/intake/governance-catalog:", text)
         self.assertIn("CanonicalBusinessCase:", text)
 
-    def test_agents_cli_manifest_uses_current_session_type_key(self):
+    def test_agents_cli_manifest_uses_durable_agent_platform_sessions(self):
         text = MANIFEST.read_text()
-        self.assertIn("session_type: in_memory", text)
+        self.assertIn("session_type: agent_platform_sessions", text)
+        self.assertNotIn("session_type: in_memory", text)
         self.assertNotIn("session_storage:", text)
 
 
