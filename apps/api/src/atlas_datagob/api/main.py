@@ -26,6 +26,7 @@ from atlas_datagob.services.classifier import classify_demand
 from atlas_datagob.services.demand_backlog import (
     create_demand_record,
     get_demand_record,
+    generate_synthetic_demand_records,
     list_demand_records,
     load_demo_seed_records,
     reset_demo_backlog,
@@ -66,7 +67,7 @@ DATA_ROOT = Path("data")
 DOMAINS_PATH = DATA_ROOT / "synthetic" / "domains" / "domains.json"
 DICTIONARY_PATH = DATA_ROOT / "canonical" / "data_dictionary.json"
 ER_MODEL_PATH = DATA_ROOT / "canonical" / "entity_relationship_model.json"
-API_VERSION = "0.6.4"
+API_VERSION = "0.7.0"
 
 
 def _allowed_origins() -> list[str]:
@@ -130,6 +131,10 @@ if FastAPI:
         decision: str | None = None
         actor: str = "Data Steward"
         comment: str | None = None
+
+    class SyntheticDataPayload(BaseModel):
+        count: int = Field(default=25, ge=1, le=100)
+        actor: str = "Synthetic Data Operator"
 
     class ScoringPayload(BaseModel):
         business_value: int = Field(ge=1, le=5)
@@ -211,6 +216,24 @@ if FastAPI:
     def demand_backlog(status: str | None = None) -> dict:
         records = list_demand_records(status=status)
         return {"count": len(records), "demands": records}
+
+    @app.post("/synthetic-data/generate")
+    def synthetic_data_generate(payload: SyntheticDataPayload) -> dict:
+        try:
+            result = generate_synthetic_demand_records(
+                count=payload.count,
+                actor=payload.actor,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        return {
+            **result,
+            "message": (
+                f"{result['count']} demandas sintéticas agregadas "
+                "sin eliminar registros existentes."
+            ),
+        }
 
     @app.get("/demo/cases")
     def demo_cases() -> dict:

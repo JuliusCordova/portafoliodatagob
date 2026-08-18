@@ -1,11 +1,11 @@
 openapi: 3.1.0
 info:
   title: ATLAS DataGob API
-  version: 0.4.0
+  version: 0.7.0
   description: >
-    Contract-first API for the ATLAS DataGob MVP. This contract captures the
-    canonical metadata endpoints plus intake classification, scoring and the
-    Sprint 04 Policy RAG architecture validation endpoint.
+    Contract-first API for ATLAS DataGob. The API supports governed demand
+    intake, prioritization, portfolio workflows, canonical metadata and
+    controlled synthetic-data generation for testing and demonstrations.
 paths:
   /health:
     get:
@@ -45,6 +45,29 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PolicyArchitectureValidationResult"
+  /synthetic-data/generate:
+    post:
+      summary: Generate synthetic demand records without deleting existing backlog data.
+      description: >
+        Creates a new batch of controlled synthetic demands and appends them to
+        the configured runtime repository. Existing operational records are
+        preserved. Generated records include synthetic provenance metadata and
+        a batch identifier.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SyntheticDataPayload"
+      responses:
+        "200":
+          description: Synthetic demand batch generated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyntheticDataGenerateResponse"
+        "400":
+          description: Invalid generation request.
   /policies:
     get:
       summary: Return the versioned policy corpus metadata.
@@ -187,6 +210,43 @@ components:
           type: string
         committee_summary:
           type: string
+    SyntheticDataPayload:
+      type: object
+      properties:
+        count:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 25
+        actor:
+          type: string
+          default: Synthetic Data Operator
+
+    SyntheticDataGenerateResponse:
+      type: object
+      required:
+        - batch_id
+        - count
+        - total_backlog
+        - demands
+        - message
+      properties:
+        batch_id:
+          type: string
+          description: Unique identifier for the generated synthetic batch.
+        count:
+          type: integer
+          description: Number of synthetic demands generated.
+        total_backlog:
+          type: integer
+          description: Total backlog size after append-only generation.
+        demands:
+          type: array
+          items:
+            type: object
+        message:
+          type: string
+
     ScoringPayload:
       type: object
       required:

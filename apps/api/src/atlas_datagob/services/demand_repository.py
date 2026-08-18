@@ -32,6 +32,9 @@ class DemandRepository(Protocol):
     def replace_all(self, records: list[dict]) -> None:
         """Replace the complete persisted demand collection."""
 
+    def append_many(self, records: list[dict]) -> None:
+        """Append records without deleting existing persisted demands."""
+
 
 class LocalJsonDemandRepository:
     """Demand repository backed by a JSON file.
@@ -58,6 +61,10 @@ class LocalJsonDemandRepository:
         with self.path.open("w", encoding="utf-8") as file:
             json.dump(normalized, file, indent=2, ensure_ascii=False)
             file.write("\n")
+
+    def append_many(self, records: list[dict]) -> None:
+        existing = self.load_all()
+        self.replace_all(existing + records)
 
 
 class FirestoreDemandRepository:
@@ -120,6 +127,15 @@ class FirestoreDemandRepository:
 
         for stale_document_id in existing_document_ids - incoming_document_ids:
             collection.document(stale_document_id).delete()
+
+        for record in normalized:
+            collection.document(record["demand_id"]).set(record)
+
+    def append_many(self, records: list[dict]) -> None:
+        """Persist new demand documents without deleting existing Firestore records."""
+
+        normalized = normalize_and_validate_records(records)
+        collection = self._collection()
 
         for record in normalized:
             collection.document(record["demand_id"]).set(record)
