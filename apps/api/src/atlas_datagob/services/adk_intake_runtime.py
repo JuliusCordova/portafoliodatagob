@@ -20,6 +20,14 @@ class _StateToolContext:
         self.state = state
 
 
+def new_intake_session_id() -> str:
+    """Create a client session ID compatible with Agent Platform Sessions."""
+
+    # Agent Platform user-defined session IDs accept lowercase letters, digits and
+    # hyphens, up to 63 characters. Keep this stable across in-memory and durable modes.
+    return f"intake-{uuid4().hex[:12]}"
+
+
 def materialize_business_case(state: dict[str, Any]) -> dict:
     """Build a current governed Business Case snapshot from structured session state."""
 
@@ -248,7 +256,7 @@ async def run_intake_turn(*, user_id: str, message: str, session_id: str | None 
 
     from google.genai import types  # type: ignore
 
-    resolved_session_id = session_id or f"INTAKE-{uuid4().hex[:12].upper()}"
+    resolved_session_id = session_id or new_intake_session_id()
     await _get_or_create_session(user_id, resolved_session_id)
 
     # Mandatory semantic extraction happens before conversational orchestration. This is
