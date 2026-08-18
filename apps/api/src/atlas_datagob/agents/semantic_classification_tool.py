@@ -134,10 +134,13 @@ def classify_project_capabilities(
             agent_design=agent_design,
         )
 
-    if primary_type == "agentic_ai":
-        if writes_to_systems:
-            agent_type = "action_agent"
-        elif agent_design in AGENT_TYPES:
+    # A material write/action is not merely a recommendation. Keep both subtype and
+    # autonomy classification aligned so governance can apply action-agent controls.
+    if primary_type == "agentic_ai" and writes_to_systems:
+        subtype = "action_agent"
+        agent_type = "action_agent"
+    elif primary_type == "agentic_ai":
+        if agent_design in AGENT_TYPES:
             agent_type = agent_design
         else:
             agent_type = subtype if subtype in AGENT_TYPES else "workflow_agent"
