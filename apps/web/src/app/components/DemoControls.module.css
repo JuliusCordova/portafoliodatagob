@@ -12,11 +12,37 @@
   backdrop-filter: blur(18px);
 }
 
+.launcher {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 50;
+  border: 1px solid rgba(36, 88, 255, 0.16);
+  border-radius: 999px;
+  padding: 11px 16px;
+  color: #2458ff;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 12px 36px rgba(8, 17, 31, 0.14);
+  backdrop-filter: blur(14px);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.launcher:hover {
+  background: #edf3ff;
+}
+
 .header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .header strong {
@@ -50,7 +76,8 @@
 
 .primary,
 .secondary,
-.toggle {
+.toggle,
+.close {
   border: 0;
   border-radius: 999px;
   font-weight: 800;
@@ -74,6 +101,12 @@
   padding: 9px 12px;
   color: #2458ff;
   background: #edf3ff;
+}
+
+.close {
+  padding: 9px 12px;
+  color: #5f6f86;
+  background: #f4f6f9;
 }
 
 .guide {
@@ -107,8 +140,20 @@
     bottom: 16px;
     width: auto;
   }
-}
 
+  .launcher {
+    right: 16px;
+    bottom: 16px;
+  }
+
+  .header {
+    gap: 10px;
+  }
+
+  .headerActions {
+    gap: 6px;
+  }
+}
 
 .generatorRow {
   margin: 0 0 14px;

@@ -23,7 +23,8 @@ export default function DemoControls() {
   const [message, setMessage] = useState(
     "Genera datos ficticios sin eliminar las demandas existentes."
   );
-  const [expanded, setExpanded] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
 
   async function generateSyntheticData() {
     const confirmed = window.confirm(
@@ -91,8 +92,23 @@ export default function DemoControls() {
     }
   }
 
+  if (!panelOpen) {
+    return (
+      <button
+        className={styles.launcher}
+        type="button"
+        onClick={() => setPanelOpen(true)}
+        aria-expanded="false"
+        aria-controls="atlas-synthetic-data-panel"
+      >
+        Datos sintéticos
+      </button>
+    );
+  }
+
   return (
     <aside
+      id="atlas-synthetic-data-panel"
       className={`${styles.panel} ${styles[state]}`}
       aria-label="Controles de datos sintéticos ATLAS DataGob"
     >
@@ -104,15 +120,26 @@ export default function DemoControls() {
           <strong>Datos sintéticos</strong>
         </div>
 
-        <button
-          className={styles.toggle}
-          type="button"
-          onClick={() =>
-            setExpanded((value) => !value)
-          }
-        >
-          {expanded ? "Ocultar" : "Guía"}
-        </button>
+        <div className={styles.headerActions}>
+          <button
+            className={styles.toggle}
+            type="button"
+            onClick={() =>
+              setGuideOpen((value) => !value)
+            }
+          >
+            {guideOpen ? "Ocultar guía" : "Guía"}
+          </button>
+
+          <button
+            className={styles.close}
+            type="button"
+            onClick={() => setPanelOpen(false)}
+            aria-label="Cerrar controles de datos sintéticos"
+          >
+            Cerrar
+          </button>
+        </div>
       </div>
 
       <p className={styles.message}>{message}</p>
@@ -157,7 +184,7 @@ export default function DemoControls() {
         </a>
       </div>
 
-      {expanded ? (
+      {guideOpen ? (
         <ol className={styles.guide}>
           <li>
             Selecciona cuántas demandas ficticias
