@@ -108,3 +108,28 @@
     width: auto;
   }
 }
+
+
+.generatorRow {
+  margin: 0 0 14px;
+}
+
+.generatorRow label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #34445c;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.generatorRow select {
+  min-width: 92px;
+  border: 1px solid rgba(36, 88, 255, 0.18);
+  border-radius: 12px;
+  padding: 8px 10px;
+  color: #08111f;
+  background: #ffffff;
+  font-weight: 800;
+}

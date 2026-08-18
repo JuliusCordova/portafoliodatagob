@@ -45,6 +45,13 @@ type DemandRecord = {
   status: string;
   decision: string;
   current_stage: string;
+  data_origin?: "synthetic" | "operational";
+  synthetic_metadata?: {
+    batch_id?: string;
+    generated_at?: string;
+    generator_version?: string;
+    template_reference?: string;
+  };
   request: {
     title: string;
     description: string;
@@ -965,7 +972,14 @@ export default function HomePage() {
                       const score = scoreFromDemand(item);
                       return (
                         <tr key={item.demand_id} className={selectedDemandId === item.demand_id ? "selected" : ""}>
-                          <td><button className="link-button" onClick={() => openEditor(item)}>{item.demand_id}</button></td>
+                          <td>
+                            <button className="link-button" onClick={() => openEditor(item)}>
+                              {item.demand_id}
+                            </button>
+                            {item.data_origin === "synthetic" ? (
+                              <small>Datos sintéticos</small>
+                            ) : null}
+                          </td>
                           <td><strong>{item.request.title}</strong><small>{compact(item.request.description, 92)}</small></td>
                           <td>{item.request.requester_area}</td>
                           <td>{item.request.domain_hint || "No definido"}</td>

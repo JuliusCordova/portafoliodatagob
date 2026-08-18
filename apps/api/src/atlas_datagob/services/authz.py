@@ -53,6 +53,7 @@ PERMISSIONS_BY_ROLE: dict[str, set[str]] = {
     ROLE_DATA_STEWARD: {
         *READ_ONLY_PERMISSIONS,
         "demo:reset",
+        "synthetic:generate",
         "demand:create",
         "demand:update",
         "demand:score",
@@ -234,6 +235,8 @@ def permission_for_request(method: str, path: str) -> str | None:
         return "demo:read"
     if path == "/demo/reset" and method == "POST":
         return "demo:reset"
+    if path == "/synthetic-data/generate" and method == "POST":
+        return "synthetic:generate"
     if path.startswith("/demands/") and path.endswith("/status") and method == "PATCH":
         return "demand:status:update"
     if path.startswith("/demands/") and path.endswith("/score") and method == "POST":

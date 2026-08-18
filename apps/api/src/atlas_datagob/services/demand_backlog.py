@@ -15,6 +15,7 @@ from uuid import uuid4
 from atlas_datagob.services.demand_lifecycle import (
     DEMAND_RECORD_SCHEMA_VERSION,
     assert_transition_allowed,
+    normalize_and_validate_records,
 )
 from atlas_datagob.services.demand_repository import demand_repository_for
 from atlas_datagob.services.persistence_config import (
@@ -97,6 +98,53 @@ def write_demand_records(records: list[dict], path: str | Path | None = None) ->
     demand_repository_for(_runtime_backlog_path(path)).replace_all(records)
 
 
+def append_demand_records(records: list[dict], path: str | Path | None = None) -> None:
+    """Append records without deleting existing operational demands."""
+
+    demand_repository_for(
+        _runtime_backlog_path(path)
+    ).append_many(records)
+
+
+def _load_synthetic_template_records(
+    template_path: str | Path | None = None,
+) -> list[dict]:
+    """Load synthetic templates directly from local JSON.
+
+    This intentionally bypasses the configured runtime repository.
+    When production uses Firestore, synthetic templates must never
+    be sourced from operational Firestore records.
+    """
+
+    path = (
+        Path(template_path)
+        if template_path is not None
+        else _runtime_seed_path()
+    )
+
+    if not path.exists():
+        raise ValueError(
+            f"Synthetic template dataset not found: {path}"
+        )
+
+    with path.open("r", encoding="utf-8") as file:
+        payload = json.load(file)
+
+    if not isinstance(payload, list):
+        raise ValueError(
+            f"Invalid synthetic template dataset: {path}"
+        )
+
+    records = normalize_and_validate_records(payload)
+
+    if not records:
+        raise ValueError(
+            f"Synthetic template dataset has no records: {path}"
+        )
+
+    return records
+
+
 def load_demo_seed_records(seed_path: str | Path | None = None) -> list[dict]:
     """Load curated records used to reset and rehearse product demos."""
 
@@ -134,6 +182,216 @@ def reset_demo_backlog(
         )
     write_demand_records(records, path)
     return records
+
+
+
+_SYNTHETIC_CONTEXTS = [
+    ("Comercial", "Clientes"),
+    ("Ventas", "Ventas"),
+    ("Marketing", "Clientes"),
+    ("Operaciones", "Logística"),
+    ("Finanzas", "Finanzas"),
+    ("Riesgos", "Riesgos"),
+    ("Gobierno de Datos", "Datos Maestros"),
+    ("Tecnología", "Plataforma de Datos"),
+    ("Producto", "Producto"),
+    ("Experiencia Cliente", "Clientes"),
+]
+
+
+def _clamp_score(value: object, fallback: int = 3) -> int:
+    try:
+        numeric = int(value)
+    except (TypeError, ValueError):
+        return fallback
+    return max(1, min(5, numeric))
+
+
+def _normalize_synthetic_scoring(record: dict) -> None:
+    """Align generated scored records with the current governed MVP scoring model."""
+
+    if record.get("status") != "scored":
+        return
+
+    business = record.setdefault("business_inputs", {})
+    committee = record.setdefault("committee_inputs", {})
+
+    operational = _clamp_score(business.get("operational_impact"), 3)
+    strategic = _clamp_score(business.get("strategic_impact"), 3)
+    business_value = round((operational + strategic) / 2)
+
+    strategic_alignment = _clamp_score(
+        business.get("strategic_alignment"),
+        3,
+    )
+    data_readiness = _clamp_score(
+        committee.get("data_readiness"),
+        3,
+    )
+    technical_feasibility = _clamp_score(
+        committee.get("technical_feasibility"),
+        3,
+    )
+    execution_effort = _clamp_score(
+        committee.get("execution_effort"),
+        3,
+    )
+    risk_control = _clamp_score(
+        committee.get("risk_control"),
+        3,
+    )
+
+    values = {
+        "business_value": business_value,
+        "strategic_alignment": strategic_alignment,
+        "data_readiness": data_readiness,
+        "technical_feasibility": technical_feasibility,
+        "execution_effort": execution_effort,
+        "risk_control": risk_control,
+    }
+
+    weights = {
+        "business_value": 0.30,
+        "strategic_alignment": 0.20,
+        "data_readiness": 0.15,
+        "technical_feasibility": 0.15,
+        "execution_effort": 0.10,
+        "risk_control": 0.10,
+    }
+
+    components = {
+        key: round(values[key] * weight, 4)
+        for key, weight in weights.items()
+    }
+
+    score = round(sum(components.values()), 2)
+
+    if score >= 4.0:
+        priority = "Alta"
+    elif score >= 3.2:
+        priority = "Media"
+    elif score >= 2.5:
+        priority = "Backlog"
+    else:
+        priority = "Reformular"
+
+    previous = record.get("scoring", {})
+
+    record["scoring"] = {
+        **previous,
+        "score": score,
+        "priority": priority,
+        "rationale": (
+            f"Prioridad {priority} por score ponderado {score}. "
+            "Registro generado con datos sintéticos."
+        ),
+        "components": components,
+        "model_version": "scoring-governed-mvp-v2",
+        "governance_note": (
+            "Synthetic record generated for controlled product testing."
+        ),
+    }
+
+    record["decision"] = f"priority_{priority.lower()}"
+
+
+def generate_synthetic_demand_records(
+    *,
+    count: int = 25,
+    template_path: str | Path | None = None,
+    path: str | Path | None = None,
+    actor: str = "ATLAS Synthetic Data Generator",
+) -> dict:
+    """Generate synthetic demand records without deleting existing backlog data."""
+
+    if count < 1 or count > 100:
+        raise ValueError("Synthetic demand count must be between 1 and 100")
+
+    templates = _load_synthetic_template_records(
+        template_path
+    )
+    existing = load_demand_records(path)
+
+    now = utc_now()
+    date_token = now[:10].replace("-", "")
+    batch_id = f"SYN-{date_token}-{uuid4().hex[:8].upper()}"
+
+    generated: list[dict] = []
+
+    for index in range(count):
+        template = _clone_records(
+            [templates[index % len(templates)]]
+        )[0]
+
+        template_reference = template.get(
+            "demand_id",
+            f"TEMPLATE-{index + 1}",
+        )
+
+        area, domain = _SYNTHETIC_CONTEXTS[
+            index % len(_SYNTHETIC_CONTEXTS)
+        ]
+
+        record_id = (
+            f"DEM-SYN-{date_token}-"
+            f"{uuid4().hex[:8].upper()}"
+        )
+
+        template["schema_version"] = DEMAND_RECORD_SCHEMA_VERSION
+        template["demand_id"] = record_id
+        template["created_at"] = now
+        template["updated_at"] = now
+        template["data_origin"] = "synthetic"
+        template["synthetic_metadata"] = {
+            "batch_id": batch_id,
+            "generated_at": now,
+            "generator_version": "atlas-synthetic-v1",
+            "template_reference": template_reference,
+        }
+
+        request = template.setdefault("request", {})
+        original_title = request.get(
+            "title",
+            "Iniciativa de datos",
+        )
+
+        request["title"] = (
+            f"{original_title} · Escenario {index + 1:02d}"
+        )
+        request["requester_area"] = area
+        request["domain_hint"] = domain
+
+        _normalize_synthetic_scoring(template)
+
+        status = template.get("status", "intake_validated")
+
+        template["events"] = [
+            _event(
+                event_type="synthetic_data_generated",
+                actor=actor,
+                from_status=None,
+                to_status=status,
+                decision=template.get("decision"),
+                comment=(
+                    "Registro sintético generado para pruebas "
+                    "controladas de ATLAS DataGob."
+                ),
+                timestamp=now,
+            )
+        ]
+
+        generated.append(template)
+
+    # IMPORTANT:
+    # append only; never replace/delete operational records.
+    append_demand_records(generated, path)
+
+    return {
+        "batch_id": batch_id,
+        "count": len(generated),
+        "total_backlog": len(existing) + len(generated),
+        "demands": generated,
+    }
 
 
 def infer_initial_status(validation_result: dict) -> str:
