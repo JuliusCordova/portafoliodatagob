@@ -1,0 +1,65 @@
+[
+  {
+    "id": "DATA-001",
+    "version": "1.0",
+    "status": "active",
+    "name": "Data ownership and traceability",
+    "applies_to": {"project_types": ["data_engineering", "dashboard_analytics", "machine_learning", "generative_ai", "agentic_ai", "data_governance", "hybrid"]},
+    "mandatory_controls": ["data_owner", "data_steward", "lineage", "data_classification"],
+    "recommendation": "Identify accountable data ownership and preserve lineage from source to consumption."
+  },
+  {
+    "id": "DATA-002",
+    "version": "1.0",
+    "status": "active",
+    "name": "Certified consumption layer",
+    "applies_to": {"project_types": ["dashboard_analytics", "machine_learning", "generative_ai", "agentic_ai"]},
+    "mandatory_controls": ["governed_silver_gold", "quality_controls", "certified_consumption"],
+    "recommendation": "Business consumption must use governed data products instead of uncontrolled operational extracts."
+  },
+  {
+    "id": "SEC-001",
+    "version": "1.0",
+    "status": "active",
+    "name": "Identity, secrets and least privilege",
+    "applies_to": {"project_types": ["data_engineering", "dashboard_analytics", "machine_learning", "generative_ai", "agentic_ai", "hybrid"]},
+    "mandatory_controls": ["least_privilege", "managed_identity", "secret_manager", "audit_logging"],
+    "recommendation": "Use managed identities, least privilege, managed secrets and auditable access."
+  },
+  {
+    "id": "ML-001",
+    "version": "1.0",
+    "status": "active",
+    "name": "Machine Learning production readiness",
+    "applies_to": {"project_types": ["machine_learning"]},
+    "mandatory_controls": ["training_data_version", "evaluation_metrics", "model_registry", "drift_monitoring", "business_owner"],
+    "recommendation": "Models require reproducible training data, agreed metrics, registry and production monitoring."
+  },
+  {
+    "id": "GENAI-001",
+    "version": "1.0",
+    "status": "active",
+    "name": "Grounded Generative AI",
+    "applies_to": {"project_types": ["generative_ai", "agentic_ai"]},
+    "mandatory_controls": ["approved_model", "grounded_sources", "prompt_and_response_logging", "evaluation", "sensitive_data_controls"],
+    "recommendation": "GenAI responses must use approved models and governed sources with evaluation and traceability."
+  },
+  {
+    "id": "AGENT-001",
+    "version": "1.0",
+    "status": "active",
+    "name": "Governed agent actions",
+    "applies_to": {"project_types": ["agentic_ai"]},
+    "mandatory_controls": ["tool_allowlist", "action_scope", "human_approval_for_material_actions", "audit_log", "fallback_and_rollback"],
+    "recommendation": "Agent reasoning may be probabilistic; material actions require explicit tool boundaries, auditability and approval according to risk."
+  },
+  {
+    "id": "FINOPS-001",
+    "version": "1.0",
+    "status": "active",
+    "name": "Cloud cost accountability",
+    "applies_to": {"project_types": ["data_engineering", "dashboard_analytics", "machine_learning", "generative_ai", "agentic_ai", "hybrid"]},
+    "mandatory_controls": ["cost_owner", "budget", "labels", "cost_monitoring"],
+    "recommendation": "Define cost owner, budget, labels and consumption monitoring before production."
+  }
+]
