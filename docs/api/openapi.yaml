@@ -1,11 +1,11 @@
 openapi: 3.1.0
 info:
   title: ATLAS DataGob API
-  version: 0.7.0
+  version: 0.8.0
   description: >
     Contract-first API for ATLAS DataGob. The API supports governed demand
-    intake, prioritization, portfolio workflows, canonical metadata and
-    controlled synthetic-data generation for testing and demonstrations.
+    intake, Gemini ADK conversational Business Case definition, prioritization,
+    portfolio workflows, canonical metadata and controlled synthetic data.
 paths:
   /health:
     get:
@@ -15,7 +15,7 @@ paths:
           description: Service health status.
   /intake/classify:
     post:
-      summary: Classify a business demand into a canonical initiative type.
+      summary: Classify a business demand into the deterministic legacy initiative taxonomy.
       requestBody:
         required: true
         content:
@@ -45,6 +45,54 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PolicyArchitectureValidationResult"
+  /intake/conversation:
+    post:
+      summary: Run one guided Gemini ADK business-intake conversation turn.
+      description: >
+        Starts or resumes an in-memory ADK intake session. The conversation may
+        invoke Data Readiness, Architecture Validation and Policy & Controls
+        specialist agents. This endpoint never creates a formal demand.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConversationalIntakePayload"
+      responses:
+        "200":
+          description: Conversational response plus current structured Business Case state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationalIntakeResponse"
+        "502":
+          description: Gemini ADK runtime failure.
+  /intake/governance-catalog:
+    get:
+      summary: Return safe readiness metadata for the versioned governance JSON catalog.
+      responses:
+        "200":
+          description: Catalog source, bucket/prefix and active record counts.
+  /intake/business-case/register:
+    post:
+      summary: Register a confirmed canonical Business Case as a governed demand.
+      description: >
+        Requires explicit user confirmation and a session whose Business Case is
+        ready to register. Registration uses the existing deterministic validation,
+        persistence and lifecycle controls.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BusinessCaseRegistrationPayload"
+      responses:
+        "200":
+          description: Demand created from the confirmed Business Case.
+        "404":
+          description: Intake session not found.
+        "409":
+          description: Confirmation missing or Business Case not ready.
   /synthetic-data/generate:
     post:
       summary: Generate synthetic demand records without deleting existing backlog data.
@@ -73,7 +121,7 @@ paths:
       summary: Return the versioned policy corpus metadata.
       responses:
         "200":
-          description: Policy documents available to the local RAG loader.
+          description: Policy documents available to the legacy local RAG loader.
   /scoring/calculate:
     post:
       summary: Calculate the prioritization score for a demand.
@@ -143,6 +191,96 @@ components:
             target_consumption:
               type: string
               nullable: true
+    ConversationalIntakePayload:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          minLength: 2
+        session_id:
+          type: string
+          nullable: true
+    ConversationalIntakeResponse:
+      type: object
+      required: [session_id, message, business_case, agent_trace]
+      properties:
+        session_id:
+          type: string
+        message:
+          type: string
+        business_case:
+          $ref: "#/components/schemas/CanonicalBusinessCase"
+        business_context:
+          type: object
+        project_classification:
+          type: object
+        data_readiness:
+          type: object
+        architecture_assessment:
+          type: object
+        policy_assessment:
+          type: object
+        agent_trace:
+          type: array
+          items:
+            type: string
+    BusinessCaseRegistrationPayload:
+      type: object
+      required: [session_id, confirmed]
+      properties:
+        session_id:
+          type: string
+          minLength: 5
+        confirmed:
+          type: boolean
+    CanonicalBusinessCase:
+      type: object
+      properties:
+        business_problem:
+          type: string
+        desired_outcome:
+          type: string
+        business_area:
+          type: string
+        stakeholders:
+          type: array
+          items:
+            type: string
+        impacted_process:
+          type: string
+        current_situation:
+          type: string
+        success_metrics:
+          type: array
+          items:
+            type: string
+        data_sources:
+          type: array
+          items:
+            type: string
+        project_classification:
+          type: object
+        data_readiness:
+          type: object
+        architecture_assessment:
+          type: object
+        policy_assessment:
+          type: object
+        preliminary_risk:
+          type: string
+        gaps:
+          type: array
+          items:
+            type: string
+        recommendation:
+          type: string
+        completeness:
+          type: integer
+          minimum: 0
+          maximum: 100
+        ready_to_register:
+          type: boolean
     ClassificationResult:
       type: object
       required: [initiative_type, confidence, rationale, signals]
@@ -221,15 +359,9 @@ components:
         actor:
           type: string
           default: Synthetic Data Operator
-
     SyntheticDataGenerateResponse:
       type: object
-      required:
-        - batch_id
-        - count
-        - total_backlog
-        - demands
-        - message
+      required: [batch_id, count, total_backlog, demands, message]
       properties:
         batch_id:
           type: string
@@ -246,7 +378,6 @@ components:
             type: object
         message:
           type: string
-
     ScoringPayload:
       type: object
       required:
