@@ -240,7 +240,11 @@ async def _persist_turn_business_facts(*, user_id: str, session_id: str, facts: 
     )
     event = Event(
         invocation_id=f"fact-extraction-{uuid4().hex[:12]}",
-        author="atlas_business_fact_extractor",
+        # The extractor runs in a separate ephemeral Runner, so its name is not part of
+        # the main conversational agent tree. Attribute the state mutation to the
+        # registered orchestrator to keep durable-session event replay free of
+        # "unknown agent" warnings; functional trace still records the extractor.
+        author="atlas_intake_orchestrator",
         actions=EventActions(
             state_delta={
                 "business_context": merged,
