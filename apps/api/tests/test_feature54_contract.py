@@ -6,6 +6,8 @@ ROOT = Path(__file__).resolve().parents[3]
 AGENT = ROOT / "apps/api/src/atlas_datagob/agents/agent.py"
 TOOLS = ROOT / "apps/api/src/atlas_datagob/agents/conversational_intake_tools.py"
 CONTEXT_TOOL = ROOT / "apps/api/src/atlas_datagob/agents/business_context_tool.py"
+FACT_EXTRACTOR = ROOT / "apps/api/src/atlas_datagob/agents/business_fact_extractor_agent.py"
+BUSINESS_CASE_SNAPSHOT = ROOT / "apps/api/src/atlas_datagob/agents/business_case_snapshot.py"
 SEMANTIC_TOOL = ROOT / "apps/api/src/atlas_datagob/agents/semantic_classification_tool.py"
 RUNTIME = ROOT / "apps/api/src/atlas_datagob/services/adk_intake_runtime.py"
 API = ROOT / "apps/api/src/atlas_datagob/api/feature54_app.py"
@@ -38,10 +40,29 @@ class Feature54ContractTest(unittest.TestCase):
 
         self.assertIn("update_business_context", root)
         self.assertIn("classify_project_capabilities", root)
-        self.assertIn("build_business_case_snapshot", root)
+        self.assertIn("build_governed_business_case_snapshot", root)
         self.assertNotIn("create_demand_record", root)
         self.assertNotIn("update_demand_record", root)
         self.assertNotIn("Firestore", root)
+
+    def test_mandatory_fact_extractor_is_schema_constrained_and_runtime_persists_state_delta(self):
+        extractor = FACT_EXTRACTOR.read_text()
+        runtime = RUNTIME.read_text()
+
+        self.assertIn("class TurnBusinessFacts(BaseModel)", extractor)
+        self.assertIn("business_fact_extractor_agent = Agent(", extractor)
+        self.assertIn("output_schema=TurnBusinessFacts", extractor)
+        self.assertIn("_extract_turn_business_facts", runtime)
+        self.assertIn("EventActions", runtime)
+        self.assertIn('"business_context": merged', runtime)
+        self.assertIn('trace: list[str] = ["atlas_business_fact_extractor"]', runtime)
+
+    def test_governed_snapshot_separates_definition_from_delivery_requirements(self):
+        snapshot = BUSINESS_CASE_SNAPSHOT.read_text()
+        self.assertIn('"definition_gaps": definition_gaps', snapshot)
+        self.assertIn('"governance_requirements": governance_requirements', snapshot)
+        self.assertIn('"gaps": definition_gaps', snapshot)
+        self.assertIn("ready = completeness == 100", snapshot)
 
     def test_tools_use_adk_session_state_and_versioned_catalogs(self):
         tools = TOOLS.read_text()
@@ -53,7 +74,6 @@ class Feature54ContractTest(unittest.TestCase):
         self.assertIn('tool_context.state["data_readiness"]', tools)
         self.assertIn('tool_context.state["architecture_assessment"]', tools)
         self.assertIn('tool_context.state["policy_assessment"]', tools)
-        self.assertIn('tool_context.state["business_case"]', tools)
         self.assertIn("load_architecture_catalog", tools)
         self.assertIn("load_policy_catalog", tools)
         self.assertIn("gemini_semantic_extraction_plus_deterministic_mapping", semantic_tool)
