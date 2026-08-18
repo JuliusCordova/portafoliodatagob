@@ -21,19 +21,13 @@ class _StateToolContext:
 
 
 def materialize_business_case(state: dict[str, Any]) -> dict:
-    """Build a current Business Case snapshot from structured session state.
+    """Build a current governed Business Case snapshot from structured session state."""
 
-    The conversational LLM is instructed to call build_business_case_snapshot itself,
-    but the API must never depend on that probabilistic choice to expose or register the
-    canonical artifact. This deterministic fallback keeps the UI and confirmation gate
-    consistent even when an LLM turn ends before invoking the snapshot tool.
-    """
-
-    from atlas_datagob.agents.conversational_intake_tools import build_business_case_snapshot
+    from atlas_datagob.agents.business_case_snapshot import build_governed_business_case_snapshot
 
     working_state = dict(state)
     context = _StateToolContext(working_state)
-    return build_business_case_snapshot(context)  # type: ignore[arg-type]
+    return build_governed_business_case_snapshot(context)  # type: ignore[arg-type]
 
 
 def merge_turn_business_facts(current: dict[str, Any], facts: dict[str, Any]) -> dict[str, Any]:
