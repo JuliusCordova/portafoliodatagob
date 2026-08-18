@@ -1,4 +1,4 @@
-"""Versioned governance catalog backed by Cloud Storage JSON with local fallback."""
+"""Versioned governance catalog backed by Cloud Storage JSON with controlled local fallback."""
 from __future__ import annotations
 
 import json
@@ -17,6 +17,10 @@ def governance_bucket_name() -> str | None:
 
 def governance_prefix() -> str:
     return os.getenv("ATLAS_GOVERNANCE_PREFIX", DEFAULT_GOVERNANCE_PREFIX).strip("/")
+
+
+def governance_requires_gcs() -> bool:
+    return os.getenv("ATLAS_GOVERNANCE_REQUIRE_GCS", "false").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _validate_record(record: Any, source: str) -> dict:
@@ -70,11 +74,19 @@ def _load_gcs_json(kind: str, bucket_name: str) -> list[dict]:
 
 
 def load_governance_records(kind: str) -> list[dict]:
-    """Load active governance records from GCS in production or local JSON in dev/test."""
+    """Load active governance records from GCS or the explicitly allowed local test fallback."""
 
     bucket_name = governance_bucket_name()
+    if not bucket_name and governance_requires_gcs():
+        raise RuntimeError(
+            "ATLAS_GOVERNANCE_REQUIRE_GCS=true but ATLAS_GOVERNANCE_BUCKET is not configured"
+        )
+
     records = _load_gcs_json(kind, bucket_name) if bucket_name else _load_local_json(kind)
-    return [record for record in records if record.get("status", "active") == "active"]
+    active = [record for record in records if record.get("status", "active") == "active"]
+    if governance_requires_gcs() and not active:
+        raise RuntimeError(f"No active governance records were loaded from GCS for {kind}")
+    return active
 
 
 def load_policy_catalog() -> list[dict]:
@@ -93,6 +105,7 @@ def catalog_snapshot() -> dict:
         "source": "gcs" if bucket_name else "local_json",
         "bucket": bucket_name,
         "prefix": governance_prefix(),
+        "gcs_required": governance_requires_gcs(),
         "policy_count": len(load_policy_catalog()),
         "architecture_pattern_count": len(load_architecture_catalog()),
     }
