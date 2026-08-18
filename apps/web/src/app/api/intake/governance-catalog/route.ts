@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { atlasProxyHeaders } from "../../_lib/identity";
+import { atlasIdentityHeaders } from "../../_lib/identity";
 
 export async function GET(request: Request) {
   const backendBaseUrl =
@@ -9,7 +9,7 @@ export async function GET(request: Request) {
   try {
     const response = await fetch(`${backendBaseUrl}/intake/governance-catalog`, {
       method: "GET",
-      headers: atlasProxyHeaders(request),
+      headers: atlasIdentityHeaders(request),
       cache: "no-store"
     });
 
