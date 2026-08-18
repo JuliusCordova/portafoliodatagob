@@ -10,6 +10,7 @@ FACT_EXTRACTOR = ROOT / "apps/api/src/atlas_datagob/agents/business_fact_extract
 BUSINESS_CASE_SNAPSHOT = ROOT / "apps/api/src/atlas_datagob/agents/business_case_snapshot.py"
 SEMANTIC_TOOL = ROOT / "apps/api/src/atlas_datagob/agents/semantic_classification_tool.py"
 RUNTIME = ROOT / "apps/api/src/atlas_datagob/services/adk_intake_runtime.py"
+SESSION_BACKEND = ROOT / "apps/api/src/atlas_datagob/services/adk_session_backend.py"
 API = ROOT / "apps/api/src/atlas_datagob/api/feature54_app.py"
 AUTHZ = ROOT / "apps/api/src/atlas_datagob/services/authz.py"
 DOCKERFILE = ROOT / "apps/api/Dockerfile"
@@ -80,13 +81,25 @@ class Feature54ContractTest(unittest.TestCase):
         self.assertIn("load_policy_catalog", tools)
         self.assertIn("gemini_semantic_extraction_plus_deterministic_mapping", semantic_tool)
 
-    def test_runner_uses_in_memory_adk_sessions_for_feature54_mvp(self):
-        text = RUNTIME.read_text()
+    def test_main_runner_supports_durable_sessions_and_fact_extractor_remains_ephemeral(self):
+        runtime = RUNTIME.read_text()
+        backend = SESSION_BACKEND.read_text()
 
-        self.assertIn("InMemorySessionService", text)
-        self.assertIn("Runner(", text)
-        self.assertIn("runner.run_async(", text)
-        self.assertIn("session_id", text)
+        self.assertIn("build_adk_session_service", runtime)
+        self.assertIn("InMemorySessionService", runtime)
+        self.assertIn("VertexAiSessionService", backend)
+        self.assertIn("ATLAS_ADK_SESSION_BACKEND", backend)
+        self.assertIn("ATLAS_ADK_REQUIRE_DURABLE_SESSIONS", backend)
+        self.assertIn("GOOGLE_CLOUD_AGENT_ENGINE_ID", backend)
+        self.assertIn("Runner(", runtime)
+        self.assertIn("runner.run_async(", runtime)
+        self.assertIn("session_id", runtime)
+
+    def test_runtime_prevents_blank_user_facing_response(self):
+        runtime = RUNTIME.read_text()
+        self.assertIn("deterministic_intake_fallback_message", runtime)
+        self.assertIn("response_fallback_used = not bool(final_text)", runtime)
+        self.assertIn('"response_fallback_used": response_fallback_used', runtime)
 
     def test_api_separates_conversation_from_registration(self):
         text = API.read_text()
