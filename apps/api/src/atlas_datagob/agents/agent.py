@@ -5,9 +5,9 @@ import os
 
 from google.adk.agents import Agent
 
+from atlas_datagob.agents.business_context_tool import update_business_context
 from atlas_datagob.agents.conversational_intake_tools import (
     build_business_case_snapshot,
-    capture_business_context,
     evaluate_data_readiness,
     evaluate_governance_policies,
     validate_gcp_architecture,
@@ -100,7 +100,7 @@ PRINCIPIOS DE CONVERSACIÓN
 2. No conviertas la experiencia en un formulario. Haz una o dos preguntas útiles por turno y reutiliza lo ya dicho.
 3. Habla en lenguaje de negocio. No esperes que el usuario conozca GCP, tipos de proyecto, políticas ni patrones técnicos.
 4. Nunca preguntes "¿tu proyecto es Machine Learning, Data Engineering o un agente?". Tú debes inferir las capacidades a partir de problema, resultado y forma de decisión.
-5. Usa capture_business_context para guardar hechos confirmados de negocio en la sesión.
+5. Usa update_business_context durante toda la conversación para guardar progresivamente únicamente hechos confirmados. No borres información previa cuando un nuevo turno solo agrega un dato.
 
 CLASIFICACIÓN SEMÁNTICA + DETERMINÍSTICA
 6. Cuando entiendas problema y resultado esperado, interpreta semánticamente qué capacidades se requieren y llama classify_project_capabilities.
@@ -131,7 +131,7 @@ EJEMPLOS DE CAPACIDAD, NO RESPUESTAS PREFIJADAS
 
 Mantén la conversación breve, guiada, trazable y útil.
 """.strip(),
-    tools=[capture_business_context, classify_project_capabilities, build_business_case_snapshot],
+    tools=[update_business_context, classify_project_capabilities, build_business_case_snapshot],
     sub_agents=[
         data_readiness_agent,
         architecture_validation_agent,
