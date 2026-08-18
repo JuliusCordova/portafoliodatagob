@@ -62,17 +62,54 @@ def merge_turn_business_facts(current: dict[str, Any], facts: dict[str, Any]) ->
     return merged
 
 
+def deterministic_intake_fallback_message(business_case: dict[str, Any]) -> str:
+    """Return a governed user-facing message when an ADK turn ends without final text."""
+
+    if business_case.get("ready_to_register"):
+        return (
+            "He actualizado el Caso de Negocio con la información de este turno. "
+            "La definición está completa y lista para tu confirmación antes del registro gobernado."
+        )
+
+    labels = {
+        "business_problem": "el problema de negocio",
+        "desired_outcome": "el resultado esperado",
+        "business_area": "el área responsable",
+        "impacted_process": "el proceso impactado",
+        "success_metrics": "la métrica de éxito",
+        "data_sources_known_or_explicit": "las fuentes de datos",
+        "project_classification": "la clasificación de la iniciativa",
+        "data_readiness": "la evaluación de disponibilidad de datos",
+        "architecture_assessment": "la validación de arquitectura",
+        "policy_assessment": "la evaluación de políticas y controles",
+    }
+    definition_gaps = business_case.get("definition_gaps") or business_case.get("gaps") or []
+    visible_gaps = [labels.get(str(item), str(item).replace("_", " ")) for item in definition_gaps[:2]]
+
+    if visible_gaps:
+        pending = " y ".join(visible_gaps)
+        return (
+            "He actualizado el Caso de Negocio con la información de este turno. "
+            f"Para completar su definición todavía necesitamos aclarar {pending}."
+        )
+
+    return (
+        "He actualizado el Caso de Negocio con la información disponible. "
+        "ATLAS continuará con las validaciones gobernadas antes de habilitar el registro."
+    )
+
+
 def _runtime():
-    """Lazily create the main ADK runner so deterministic unit tests do not require Vertex credentials."""
+    """Lazily create the main ADK runner with the configured conversational session backend."""
 
     global _session_service, _runner
     if _session_service is None or _runner is None:
         from google.adk.runners import Runner  # type: ignore
-        from google.adk.sessions import InMemorySessionService  # type: ignore
 
         from atlas_datagob.agents.agent import root_agent
+        from atlas_datagob.services.adk_session_backend import build_adk_session_service
 
-        _session_service = InMemorySessionService()
+        _session_service = build_adk_session_service()
         _runner = Runner(
             agent=root_agent,
             app_name=APP_NAME,
@@ -91,6 +128,8 @@ def _fact_runtime():
 
         from atlas_datagob.agents.business_fact_extractor_agent import business_fact_extractor_agent
 
+        # Deliberately ephemeral: this isolated one-turn session is deleted before the
+        # request returns. Only the main conversational session requires durable storage.
         _fact_session_service = InMemorySessionService()
         _fact_runner = Runner(
             agent=business_fact_extractor_agent,
@@ -252,6 +291,9 @@ async def run_intake_turn(*, user_id: str, message: str, session_id: str | None 
     )
     state = dict(session.state if session else {})
     business_case = materialize_business_case(state)
+    response_fallback_used = not bool(final_text)
+    if response_fallback_used:
+        final_text = deterministic_intake_fallback_message(business_case)
 
     return {
         "session_id": resolved_session_id,
@@ -263,6 +305,7 @@ async def run_intake_turn(*, user_id: str, message: str, session_id: str | None 
         "architecture_assessment": state.get("architecture_assessment", {}),
         "policy_assessment": state.get("policy_assessment", {}),
         "agent_trace": trace,
+        "response_fallback_used": response_fallback_used,
     }
 
 
