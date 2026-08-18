@@ -25,9 +25,16 @@ type NavigationItem = {
 
 const navigationItems: NavigationItem[] = [
   {
+    href: "/intake",
+    label: "Intake conversacional",
+    description: "Gemini ADK guía y estructura el Caso de Negocio",
+    requiredRoles: ["data_owner", "data_steward", "data_architect", "platform_admin"],
+    guardrail: "Requiere rol de negocio, stewardship o arquitectura para registrar demanda"
+  },
+  {
     href: "/",
     label: "Dashboard principal",
-    description: "Intake, backlog, scoring y vista ejecutiva"
+    description: "Backlog, scoring y vista ejecutiva"
   },
   {
     href: "/committee",
