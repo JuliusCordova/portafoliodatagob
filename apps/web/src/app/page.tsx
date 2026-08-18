@@ -302,6 +302,17 @@ function priorityTone(priority: PriorityLabel): PillTone {
   return "neutral";
 }
 
+function committeeRecommendationFromDemand(demand: DemandRecord) {
+  const explicit = asText(demand.committee_inputs?.committee_recommendation, "");
+  if (explicit) return explicit;
+
+  const priority = priorityFromDemand(demand);
+  if (priority === "Alta") return "execute";
+  if (priority === "Media") return "conditioned";
+  if (priority === "Backlog") return "backlog";
+  return "reformulate";
+}
+
 function committeeReviewers(demand: DemandRecord): string[] {
   return demand.committee.required_reviewers ?? demand.committee.required_review_roles ?? [];
 }
@@ -370,6 +381,13 @@ export default function HomePage() {
   const [editRiskControlJustification, setEditRiskControlJustification] = useState("");
   const [editReusePotential, setEditReusePotential] = useState(3);
   const [editReusePotentialJustification, setEditReusePotentialJustification] = useState("");
+  const [committeeRecommendation, setCommitteeRecommendation] = useState("execute");
+  const [committeeReason, setCommitteeReason] = useState(
+    "La evaluación operativa y el score respaldan elevar la demanda a revisión ejecutiva."
+  );
+  const [committeeConditions, setCommitteeConditions] = useState(
+    "Sujeto a los controles, dependencias y guardrails registrados para la demanda."
+  );
   const [editMessage, setEditMessage] = useState("Selecciona una demanda para editar.");
 
   const selectedDemand = useMemo(
@@ -601,6 +619,19 @@ export default function HomePage() {
     setEditRiskControlJustification(asText(committee.risk_control_justification, "Riesgo medio mitigable con controles estándar."));
     setEditReusePotential(asNumber(committee.reuse_potential, 4));
     setEditReusePotentialJustification(asText(committee.reuse_potential_justification, "Alta reutilización aplicable a múltiples áreas o dominios."));
+    setCommitteeRecommendation(committeeRecommendationFromDemand(demand));
+    setCommitteeReason(
+      asText(
+        committee.committee_reason,
+        "La evaluación operativa y el score respaldan elevar la demanda a revisión ejecutiva."
+      )
+    );
+    setCommitteeConditions(
+      asText(
+        committee.committee_conditions,
+        "Sujeto a los controles, dependencias y guardrails registrados para la demanda."
+      )
+    );
     setEditMessage(`Editando ${demand.demand_id}`);
     setDrawerOpen(true);
   }
@@ -711,6 +742,93 @@ export default function HomePage() {
     } catch (error) {
       const message = error instanceof Error ? error.message : "Error desconocido al calcular score.";
       setEditMessage(`No se pudo calcular score: ${message}`);
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function sendToExecutiveCommittee() {
+    if (!selectedDemand) return;
+
+    const persistedScore = scoreFromDemand(selectedDemand);
+
+    if (persistedScore === null) {
+      setEditMessage("Primero debes recalcular y persistir el score antes de enviar al Comité Ejecutivo.");
+      return;
+    }
+
+    if (!drawerOwnerComplete || !drawerCommitteeComplete) {
+      setEditMessage("Completa los checklists del Data Owner y Comité antes de elevar la demanda.");
+      return;
+    }
+
+    if (Math.abs(persistedScore - scorePreview.score) > 0.001) {
+      setEditMessage(
+        `El score preliminar (${scorePreview.score.toFixed(2)}) difiere del persistido (${persistedScore.toFixed(2)}). Recalcula el score antes de enviar.`
+      );
+      return;
+    }
+
+    if (committeeReason.trim().length < 10) {
+      setEditMessage("Registra una justificación de Comité antes de enviar la demanda.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "¿Enviar esta demanda al Comité Ejecutivo / Sponsor? Se cerrará la evaluación operativa y quedará disponible para revisión ejecutiva."
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setActionLoading(true);
+      setEditMessage("Registrando decisión formal del Comité Operativo...");
+
+      const now = new Date().toISOString();
+      const basePayload = editorPayload();
+
+      const payload = await persistDemandUpdate(selectedDemand.demand_id, {
+        ...basePayload,
+        committee_inputs: {
+          ...basePayload.committee_inputs,
+          committee_recommendation: committeeRecommendation,
+          committee_final_decision: "ready_for_executive_committee",
+          committee_final_status: selectedDemand.status,
+          committee_reason: committeeReason.trim(),
+          committee_conditions: committeeConditions.trim(),
+          committee_next_step: "sponsor_review",
+          committee_decision_recorded_by: "Comité Operativo",
+          committee_decision_recorded_roles: ["committee_member"],
+          committee_decision_recorded_at: now
+        },
+        validation_state: {
+          ...(selectedDemand.validation_state ?? {}),
+          ...basePayload.validation_state,
+          data_owner_inputs_validated: drawerOwnerComplete,
+          committee_inputs_complete: drawerCommitteeComplete,
+          ready_for_scoring: true,
+          committee_decision_recorded: true
+        },
+        decision: "ready_for_executive_committee",
+        actor: "Comité Operativo",
+        comment:
+          "Decisión formal del Comité Operativo registrada; demanda lista para Comité Ejecutivo / Sponsor."
+      });
+
+      setPersistedDemand(payload.demand);
+      setBacklog((items) =>
+        items.map((item) =>
+          item.demand_id === payload.demand.demand_id ? payload.demand : item
+        )
+      );
+      setEditMessage(
+        `${payload.demand.demand_id} lista para Comité Ejecutivo / Sponsor.`
+      );
+      await loadBacklog(payload.demand.demand_id);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Error desconocido al registrar la decisión.";
+      setEditMessage(`No se pudo enviar al Comité Ejecutivo: ${message}`);
     } finally {
       setActionLoading(false);
     }
@@ -976,9 +1094,68 @@ export default function HomePage() {
                   </small>
                 </section>
 
+                <section className="drawer-section">
+                  <div className="section-title-row">
+                    <div>
+                      <p className="eyebrow small">Gate formal</p>
+                      <h3>4. Decisión del Comité Operativo</h3>
+                    </div>
+                    <Pill tone={scoreFromDemand(selectedDemand) !== null ? "ok" : "warn"}>
+                      {scoreFromDemand(selectedDemand) !== null ? "Score persistido" : "Score pendiente"}
+                    </Pill>
+                  </div>
+
+                  <label>
+                    Recomendación al Comité Ejecutivo
+                    <select
+                      value={committeeRecommendation}
+                      onChange={(event) => setCommitteeRecommendation(event.target.value)}
+                    >
+                      <option value="execute">Ejecutar</option>
+                      <option value="conditioned">Ejecutar condicionado</option>
+                      <option value="backlog">Backlog</option>
+                      <option value="reformulate">Reformular</option>
+                    </select>
+                    <small>
+                      Es la recomendación del Comité Operativo; la decisión ejecutiva permanece en Sponsor Review.
+                    </small>
+                  </label>
+
+                  <label>
+                    Justificación de elevación
+                    <textarea
+                      rows={3}
+                      value={committeeReason}
+                      onChange={(event) => setCommitteeReason(event.target.value)}
+                    />
+                  </label>
+
+                  <label>
+                    Condiciones / guardrails
+                    <textarea
+                      rows={3}
+                      value={committeeConditions}
+                      onChange={(event) => setCommitteeConditions(event.target.value)}
+                    />
+                  </label>
+
+                  <small>
+                    ATLAS solo habilita el envío cuando existe score persistido y coincide con la
+                    vista previa actual. Al confirmar, se registra actor, fecha, recomendación,
+                    condiciones y evidencia auditable del gate.
+                  </small>
+                </section>
+
                 <div className="drawer-actions">
                   <button className="secondary-action" onClick={saveEditor} disabled={actionLoading}>Guardar parcial</button>
                   <button className="primary-action" onClick={calculateScore} disabled={actionLoading}>Recalcular score</button>
+                  <button
+                    className="primary-action"
+                    onClick={sendToExecutiveCommittee}
+                    disabled={actionLoading || scoreFromDemand(selectedDemand) === null}
+                  >
+                    Enviar a Comité Ejecutivo
+                  </button>
                   <button className="danger-action" onClick={() => updateDemandStatus("rejected", "rejected_by_committee", "Rechazo/cierre lógico desde Comité Operativo.")} disabled={actionLoading}>Rechazar / cerrar</button>
                 </div>
 
