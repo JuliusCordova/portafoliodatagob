@@ -7,15 +7,18 @@ The conversation is not the formal requirement. The confirmed **Business Case / 
 
 ## Product principle
 - Gemini interprets, asks, structures and explains.
+- A mandatory schema-constrained Gemini extractor persists explicit business facts on every turn.
 - Specialist agents evaluate when their expertise is required.
 - Deterministic services remain the source of truth for rules, gates and calculations.
 - A demand is not created until the user confirms the canonical business case.
+- Registration readiness is different from implementation/production control completion.
 
 ## ADK topology
 
 ```mermaid
 flowchart TD
-    U[Business user] --> O[ATLAS Intake Orchestrator\nGemini ADK]
+    U[Business user] --> F[Business Fact Extractor\nGemini ADK + output schema]
+    F --> O[ATLAS Intake Orchestrator\nGemini ADK]
     O --> C[Deterministic Project Classification Tool]
     O --> D[Data Readiness Agent]
     O --> A[Architecture Validation Agent]
@@ -27,6 +30,7 @@ flowchart TD
     P --> O
     C --> O
     O --> BC[Canonical Business Case]
+    O <--> S[(Agent Platform Sessions\nVertexAiSessionService)]
     BC --> CONF{User confirms?}
     CONF -->|No| O
     CONF -->|Yes| REG[Governed demand registration]
@@ -35,6 +39,15 @@ flowchart TD
 ```
 
 ## Agents
+
+### 0. Business Fact Extractor
+Internal, non-user-facing Gemini ADK agent executed once per user turn before the conversational Orchestrator.
+
+Responsibilities:
+- Extract only explicit or confirmed business facts from the current message.
+- Produce a schema-constrained `TurnBusinessFacts` object.
+- Persist facts through ADK session-state deltas without erasing prior evidence.
+- Never decide architecture, policies, scoring, priority or committee outcomes.
 
 ### 1. ATLAS Intake Orchestrator
 Visible conversational agent. Responsibilities:
@@ -88,7 +101,7 @@ Retrieves applicable policies from Cloud Storage JSON and explains them to the u
 
 The agent must not invent policy requirements. Applicable controls are returned by deterministic policy filtering over versioned JSON records.
 
-Output: applicable policies, mandatory controls, gaps, recommended controls and evidence references.
+Output: applicable policies, mandatory controls, missing controls, recommended controls and evidence references.
 
 ## Initiative taxonomy
 The conversational classifier uses a business-facing taxonomy:
@@ -136,12 +149,16 @@ Minimum canonical artifact:
   "architecture_assessment": {},
   "policy_assessment": {},
   "preliminary_risk": "",
+  "definition_gaps": [],
+  "governance_requirements": [],
   "gaps": [],
   "recommendation": "",
   "completeness": 0,
   "ready_to_register": false
 }
 ```
+
+`gaps` is retained for backward compatibility and, from Feature 54 onward, contains only `definition_gaps` that block Business Case registration. Delivery/production controls are exposed separately in `governance_requirements`.
 
 ## Definition of Ready
 Before ATLAS offers **Confirm and register**, the following must be sufficiently defined:
@@ -155,32 +172,35 @@ Before ATLAS offers **Confirm and register**, the following must be sufficiently
 - Data-readiness assessment.
 - Architecture assessment when the project affects the data lifecycle or serving architecture.
 - Applicable policy assessment.
-- Identified gaps and next action.
+
+Mandatory delivery/production controls such as lineage, model registry, drift monitoring, managed identity, Secret Manager, budget or cost monitoring remain visible as `governance_requirements` and continue into Committee / design / delivery. They do **not** force the business user to implement those controls before registering a sufficiently defined requirement.
 
 ## Governance catalog in Cloud Storage
 Production source:
 
 ```text
 gs://<ATLAS_GOVERNANCE_BUCKET>/<ATLAS_GOVERNANCE_PREFIX>/
-  policies/
-    data/
-    ml/
-    genai/
-    agentic/
-    privacy/
-    security/
-    finops/
-  architecture_patterns/
-    data_engineering.json
-    dashboard_analytics.json
-    machine_learning.json
-    generative_ai.json
-    agentic_ai.json
+  policies/catalog.json
+  architecture_patterns/catalog.json
 ```
 
 JSON records are versioned and include at minimum `id`, `version`, `status`, applicability and controls/components.
 
-Local JSON under `data/governance/` is allowed only as development/test fallback. Production uses Cloud Storage when `ATLAS_GOVERNANCE_BUCKET` is configured.
+Local JSON under `data/governance/` is allowed only as development/test fallback. Production is fail-closed on Cloud Storage when `ATLAS_GOVERNANCE_REQUIRE_GCS=true`.
+
+## Durable ADK sessions
+The main conversational session must survive Cloud Run restarts and cross-instance routing.
+
+Production contract:
+- `ATLAS_ADK_SESSION_BACKEND=vertex_ai`
+- `ATLAS_ADK_REQUIRE_DURABLE_SESSIONS=true`
+- `GOOGLE_CLOUD_PROJECT=<project>`
+- `GOOGLE_CLOUD_LOCATION=<region>`
+- `GOOGLE_CLOUD_AGENT_ENGINE_ID=<Agent Platform Sessions resource id>`
+
+The runtime uses ADK `VertexAiSessionService` for the main Intake conversation. Local development/tests may use `in_memory` when durable sessions are not required. The Business Fact Extractor intentionally uses a separate ephemeral in-memory session because it executes and deletes one isolated session inside the same request.
+
+Client-generated Intake session IDs must be Agent Platform compatible: lowercase letters, digits and hyphens, maximum 63 characters.
 
 ## Functional requirements
 - FR54-01: Start or resume a conversational intake session.
@@ -195,6 +215,8 @@ Local JSON under `data/governance/` is allowed only as development/test fallback
 - FR54-10: Require explicit confirmation before creating the demand.
 - FR54-11: Persist the confirmed demand through the existing governed repository/lifecycle.
 - FR54-12: Preserve existing deterministic scoring, authorization and committee gates.
+- FR54-13: Persist the main conversational ADK session outside the Cloud Run process in production.
+- FR54-14: Ensure every user turn returns non-empty user-facing text; when the LLM emits no final text, use a deterministic governed fallback based on the current Business Case state.
 
 ## Non-functional requirements
 - NFR54-01: Gemini ADK is the required orchestration framework.
@@ -205,6 +227,9 @@ Local JSON under `data/governance/` is allowed only as development/test fallback
 - NFR54-06: No policy or architecture control may be invented by the LLM.
 - NFR54-07: Specialist-agent outputs must be structured JSON-compatible objects.
 - NFR54-08: Production Cloud Run identity receives read-only access to the governance bucket.
+- NFR54-09: Production Cloud Run must fail closed if durable sessions are required but `VertexAiSessionService` is not configured.
+- NFR54-10: Main session state must remain available when two consecutive turns are served by different Cloud Run instances.
+- NFR54-11: The UI must never receive an empty assistant message from the conversational endpoint.
 
 ## Acceptance criteria
 - AC54-01: `root_agent` is a real Gemini ADK agent with three specialist sub-agents.
@@ -217,10 +242,12 @@ Local JSON under `data/governance/` is allowed only as development/test fallback
 - AC54-08: A canonical Business Case is generated before registration.
 - AC54-09: Demand creation requires explicit confirmation.
 - AC54-10: Existing demand backlog, scoring and committee tests remain green.
+- AC54-11: A fully defined case can be `ready_to_register=true` while unresolved delivery controls remain visible in `governance_requirements`.
+- AC54-12: Production session state survives runtime restart / replica changes through Agent Platform Sessions.
+- AC54-13: A blank ADK final response is replaced by a deterministic non-empty message without changing governed state.
 
 ## Deferred
-- Persistent ADK session service across Cloud Run replicas.
-- Long-term conversational memory.
+- Long-term conversational memory across separate Business Cases.
 - Vector search over policies.
 - Autonomous remediation of policy/architecture gaps.
 - Autonomous committee decisions.
