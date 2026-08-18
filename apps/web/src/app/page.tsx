@@ -346,7 +346,7 @@ export default function HomePage() {
   const [persistedDemand, setPersistedDemand] = useState<DemandRecord | null>(null);
   const [backlog, setBacklog] = useState<DemandRecord[]>([]);
   const [selectedDemandId, setSelectedDemandId] = useState<string | null>(null);
-  const [mode, setMode] = useState<RuntimeMode>("demo");
+  const [mode, setMode] = useState<RuntimeMode>("loading");
   const [connectionMessage, setConnectionMessage] = useState("Esperando validación del requerimiento.");
   const [backlogMessage, setBacklogMessage] = useState("Backlog pendiente de sincronización.");
   const [backlogLoading, setBacklogLoading] = useState(false);
@@ -510,11 +510,13 @@ export default function HomePage() {
       if (!response.ok) throw new Error(`Backlog failed with HTTP ${response.status}: ${responseText}`);
       const payload = JSON.parse(responseText) as BacklogResponse;
       setBacklog(payload.demands);
+      setMode("api");
       setBacklogMessage(`Backlog sincronizado: ${payload.count} solicitudes registradas.`);
       if (highlightDemandId) setSelectedDemandId(highlightDemandId);
       else if (!selectedDemandId && payload.demands.length) setSelectedDemandId(payload.demands[0].demand_id);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Error desconocido al sincronizar backlog.";
+      setMode("error");
       setBacklogMessage(`No se pudo sincronizar backlog: ${message}`);
     } finally {
       setBacklogLoading(false);
@@ -887,7 +889,7 @@ export default function HomePage() {
 
       <section className={`status-card status-${mode}`}>
         <strong>Estado de ejecución</strong>
-        <span>{connectionMessage}</span>
+        <span>{activeView === "executive" ? backlogMessage : connectionMessage}</span>
       </section>
 
       {activeView === "intake" && (
