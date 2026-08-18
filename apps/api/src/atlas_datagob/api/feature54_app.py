@@ -18,6 +18,7 @@ from atlas_datagob.services.business_case_registration import business_case_to_v
 from atlas_datagob.services.demand_backlog import (
     create_demand_record,
     update_demand_record,
+    update_demand_record_status,
 )
 from atlas_datagob.services.governance_catalog import catalog_snapshot
 
@@ -113,8 +114,9 @@ async def register_business_case(payload: BusinessCaseRegistrationPayload, reque
 
     validation = business_case_to_validation_result(business_case)
     demand = create_demand_record(validation, actor=context.user)
+    demand_id = demand["demand_id"]
     demand = update_demand_record(
-        demand["demand_id"],
+        demand_id,
         business_inputs={
             "canonical_business_case": business_case,
             "intake_session_id": payload.session_id,
@@ -131,6 +133,18 @@ async def register_business_case(payload: BusinessCaseRegistrationPayload, reque
     )
     if demand is None:
         raise HTTPException(status_code=500, detail="Demand was created but could not be reloaded after Business Case update")
+
+    if validation.get("recommended_next_action") == "operative_committee_review" and demand.get("status") != "operative_committee_review":
+        transitioned = update_demand_record_status(
+            demand_id,
+            status="operative_committee_review",
+            decision="business_case_confirmed_for_committee",
+            actor=context.user,
+            comment="Caso de Negocio confirmado; demanda enviada al Comité Operativo para evaluación gobernada.",
+        )
+        if transitioned is None:
+            raise HTTPException(status_code=500, detail="Demand was registered but could not transition to Operative Committee")
+        demand = transitioned
 
     return {
         "demand": demand,
