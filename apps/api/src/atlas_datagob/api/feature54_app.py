@@ -4,7 +4,6 @@ from __future__ import annotations
 from typing import Any
 
 from atlas_datagob.api import main as main_api
-from atlas_datagob.agents.policy_intake_agent import PolicyIntakeAgent
 from atlas_datagob.services.adk_intake_runtime import (
     get_intake_session_state,
     run_intake_turn,
@@ -15,12 +14,12 @@ from atlas_datagob.services.authz import (
     context_from_headers,
     require_permission,
 )
+from atlas_datagob.services.business_case_registration import business_case_to_validation_result
 from atlas_datagob.services.demand_backlog import (
     create_demand_record,
     update_demand_record,
 )
 from atlas_datagob.services.governance_catalog import catalog_snapshot
-from atlas_datagob.services.policy_architecture_validation import IntakeValidationContext
 
 try:
     from fastapi import HTTPException, Request
@@ -60,52 +59,19 @@ def _authorized_user(request: Request, permission: str):
         raise HTTPException(status_code=403, detail=str(exc)) from exc
 
 
-def _target_consumption(project_type: str) -> str:
-    return {
-        "dashboard_analytics": "BI ejecutivo / dashboard",
-        "machine_learning": "Machine Learning",
-        "generative_ai": "GenAI / RAG",
-        "agentic_ai": "GenAI / RAG / agente",
-        "data_engineering": "Data platform / governed data product",
-        "data_governance": "Gobierno de datos",
-    }.get(project_type, "Por definir")
-
-
-def _business_case_title(business_case: dict) -> str:
-    classification = business_case.get("project_classification", {})
-    subtype = str(classification.get("subtype") or classification.get("primary_type") or "iniciativa")
-    outcome = str(business_case.get("desired_outcome") or business_case.get("business_problem") or "Caso de negocio")
-    label = subtype.replace("_", " ").strip().title()
-    return f"{label}: {outcome[:90]}"
-
-
-def _business_case_description(business_case: dict) -> str:
-    parts = [
-        f"Problema de negocio: {business_case.get('business_problem', '')}",
-        f"Resultado esperado: {business_case.get('desired_outcome', '')}",
-        f"Situación actual: {business_case.get('current_situation', '')}",
-        f"Proceso impactado: {business_case.get('impacted_process', '')}",
-    ]
-    sources = business_case.get("data_sources", [])
-    if sources:
-        parts.append("Fuentes conocidas: " + ", ".join(str(item) for item in sources))
-    return "\n".join(part for part in parts if not part.endswith(": "))
-
-
 @app.post("/intake/conversation")
 async def conversational_intake(payload: ConversationalIntakePayload, request: Request) -> dict:
     """Run one Gemini ADK guided-intake turn without persisting a demand."""
 
     context = _authorized_user(request, "intake:validate")
     try:
-        result = await run_intake_turn(
+        return await run_intake_turn(
             user_id=context.user,
             message=payload.message,
             session_id=payload.session_id,
         )
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Gemini ADK intake failed: {exc}") from exc
-    return result
 
 
 @app.get("/intake/governance-catalog")
@@ -145,25 +111,7 @@ async def register_business_case(payload: BusinessCaseRegistrationPayload, reque
             },
         )
 
-    classification = business_case.get("project_classification", {})
-    project_type = str(classification.get("primary_type") or "unknown")
-    validation_context = IntakeValidationContext(
-        title=_business_case_title(business_case),
-        description=_business_case_description(business_case),
-        requester_area=str(business_case.get("business_area") or "unknown"),
-        requester_role="Data Owner",
-        domain_hint=None,
-        target_consumption=_target_consumption(project_type),
-    )
-    validation = PolicyIntakeAgent().validate(validation_context)
-    validation["agent_trace"] = [
-        "ATLAS Intake Orchestrator",
-        "Data Readiness Agent",
-        "Architecture Validation Agent",
-        "Policy & Controls Agent",
-        *validation.get("agent_trace", []),
-    ]
-
+    validation = business_case_to_validation_result(business_case)
     demand = create_demand_record(validation, actor=context.user)
     demand = update_demand_record(
         demand["demand_id"],
@@ -181,7 +129,7 @@ async def register_business_case(payload: BusinessCaseRegistrationPayload, reque
         actor=context.user,
         comment="Caso de negocio confirmado por el usuario y registrado desde Gemini ADK Conversational Intake.",
     )
-    if demand is None:  # Defensive guard: creation and immediate governed update must be atomic from the caller perspective.
+    if demand is None:
         raise HTTPException(status_code=500, detail="Demand was created but could not be reloaded after Business Case update")
 
     return {
