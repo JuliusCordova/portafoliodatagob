@@ -61,6 +61,12 @@ COMPONENT_SIGNALS = {
     "finops": {"finops", "costo", "costos", "budget", "presupuesto", "labels", "billing", "particionado", "clustering"},
     "event_ingestion": {"pubsub", "pub/sub", "streaming", "evento", "tiempo real", "datastream"},
     "state_management": {"estado", "state", "checkpoint", "exactly once", "ventanas"},
+    "security": {"seguridad", "security", "iam", "cifrado", "encryption", "secret manager", "vpc", "private access", "least privilege"},
+    "tool_boundary": {"tool boundary", "tool allowlist", "herramientas permitidas", "allowlist", "function calling"},
+    "identity": {"identidad", "identity", "service account", "managed identity", "iam"},
+    "human_approval": {"human in the loop", "human approval", "aprobacion humana", "aprobación humana", "visto bueno humano"},
+    "audit_log": {"audit log", "auditoria", "auditoría", "cloud audit logs", "logging"},
+    "rollback": {"rollback", "reversa", "reversión", "reversion", "fallback", "contingencia"},
 }
 
 
