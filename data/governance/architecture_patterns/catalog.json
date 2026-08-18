@@ -1,0 +1,52 @@
+[
+  {
+    "id": "GCP-DE-001",
+    "version": "1.0",
+    "status": "active",
+    "project_types": ["data_engineering", "data_governance", "hybrid"],
+    "name": "Governed Data Engineering Lifecycle",
+    "required_components": ["sources", "extraction", "landing", "bronze", "silver", "gold", "quality", "reconciliation", "lineage", "security", "monitoring", "finops"],
+    "gcp_services": ["Cloud Storage", "BigQuery", "Dataflow or Dataproc when required", "Datastream when CDC applies", "Dataplex", "IAM", "Secret Manager", "Cloud Logging", "Cloud Monitoring"],
+    "principle": "All data moves through governed lifecycle layers with quality, reconciliation, lineage, security, observability and cost controls."
+  },
+  {
+    "id": "GCP-BI-001",
+    "version": "1.0",
+    "status": "active",
+    "project_types": ["dashboard_analytics"],
+    "name": "Governed Analytics and Dashboard Lifecycle",
+    "required_components": ["sources", "extraction", "landing", "bronze", "silver", "gold", "certified_dataset", "semantic_model", "serving", "security", "monitoring", "finops"],
+    "gcp_services": ["Cloud Storage", "BigQuery", "Dataplex", "Looker or approved BI serving layer", "IAM", "Cloud Monitoring"],
+    "principle": "Dashboards consume certified Gold data products and a governed semantic layer with controlled access rather than operational sources directly."
+  },
+  {
+    "id": "GCP-ML-001",
+    "version": "1.0",
+    "status": "active",
+    "project_types": ["machine_learning"],
+    "name": "Governed Machine Learning Lifecycle",
+    "required_components": ["sources", "extraction", "bronze", "silver", "gold", "feature_layer", "model_registry", "serving", "model_monitoring", "security", "monitoring", "finops"],
+    "gcp_services": ["Cloud Storage", "BigQuery", "Vertex AI", "Vertex AI Model Registry", "Cloud Run when API serving applies", "IAM", "Secret Manager", "Cloud Monitoring"],
+    "principle": "ML solutions inherit governed data layers and add versioned features, model registry, evaluation, secure serving and model monitoring."
+  },
+  {
+    "id": "GCP-GENAI-001",
+    "version": "1.0",
+    "status": "active",
+    "project_types": ["generative_ai"],
+    "name": "Governed GenAI and RAG Lifecycle",
+    "required_components": ["sources", "extraction", "bronze", "silver", "gold", "knowledge_layer", "embeddings", "vector_index", "retrieval_governance", "serving", "security", "monitoring", "finops"],
+    "gcp_services": ["Cloud Storage", "BigQuery", "Vertex AI Gemini", "Vertex AI Vector Search or approved vector layer", "Cloud Run", "IAM", "Secret Manager", "Cloud Logging", "Cloud Monitoring"],
+    "principle": "GenAI solutions use traceable governed knowledge, controlled retrieval, source attribution, security, evaluation and observability."
+  },
+  {
+    "id": "GCP-AGENT-001",
+    "version": "1.0",
+    "status": "active",
+    "project_types": ["agentic_ai"],
+    "name": "Governed Agentic AI Lifecycle",
+    "required_components": ["sources", "knowledge_layer", "retrieval_governance", "tool_boundary", "identity", "security", "human_approval", "audit_log", "rollback", "serving", "monitoring", "finops"],
+    "gcp_services": ["Vertex AI Gemini", "Gemini ADK", "Cloud Run or Vertex AI Agent Runtime", "Cloud Storage", "IAM", "Secret Manager", "Cloud Logging", "Cloud Monitoring"],
+    "principle": "Agents may reason and recommend, but actions, identities, tools, approvals, auditability, rollback and security remain explicitly governed."
+  }
+]
