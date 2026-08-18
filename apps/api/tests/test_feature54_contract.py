@@ -5,6 +5,8 @@ import unittest
 ROOT = Path(__file__).resolve().parents[3]
 AGENT = ROOT / "apps/api/src/atlas_datagob/agents/agent.py"
 TOOLS = ROOT / "apps/api/src/atlas_datagob/agents/conversational_intake_tools.py"
+CONTEXT_TOOL = ROOT / "apps/api/src/atlas_datagob/agents/business_context_tool.py"
+SEMANTIC_TOOL = ROOT / "apps/api/src/atlas_datagob/agents/semantic_classification_tool.py"
 RUNTIME = ROOT / "apps/api/src/atlas_datagob/services/adk_intake_runtime.py"
 API = ROOT / "apps/api/src/atlas_datagob/api/feature54_app.py"
 AUTHZ = ROOT / "apps/api/src/atlas_datagob/services/authz.py"
@@ -16,7 +18,7 @@ POLICY_CATALOG = ROOT / "data/governance/policies/catalog.json"
 
 
 class Feature54ContractTest(unittest.TestCase):
-    def test_real_adk_root_agent_has_three_specialists(self):
+    def test_real_adk_root_agent_has_three_single_turn_specialists(self):
         text = AGENT.read_text()
 
         self.assertIn("from google.adk.agents import Agent", text)
@@ -24,31 +26,37 @@ class Feature54ContractTest(unittest.TestCase):
         self.assertIn("data_readiness_agent = Agent(", text)
         self.assertIn("architecture_validation_agent = Agent(", text)
         self.assertIn("policy_controls_agent = Agent(", text)
+        self.assertGreaterEqual(text.count('mode="single_turn"'), 3)
         self.assertIn("sub_agents=[", text)
         self.assertIn("data_readiness_agent", text)
         self.assertIn("architecture_validation_agent", text)
         self.assertIn("policy_controls_agent", text)
 
-    def test_root_agent_has_no_demand_persistence_tool(self):
+    def test_root_agent_has_semantic_classifier_progressive_context_and_no_persistence_tool(self):
         text = AGENT.read_text()
         root = text[text.index("root_agent = Agent("):]
 
+        self.assertIn("update_business_context", root)
+        self.assertIn("classify_project_capabilities", root)
         self.assertIn("build_business_case_snapshot", root)
         self.assertNotIn("create_demand_record", root)
         self.assertNotIn("update_demand_record", root)
         self.assertNotIn("Firestore", root)
 
     def test_tools_use_adk_session_state_and_versioned_catalogs(self):
-        text = TOOLS.read_text()
+        tools = TOOLS.read_text()
+        context_tool = CONTEXT_TOOL.read_text()
+        semantic_tool = SEMANTIC_TOOL.read_text()
 
-        self.assertIn('tool_context.state["business_context"]', text)
-        self.assertIn('tool_context.state["project_classification"]', text)
-        self.assertIn('tool_context.state["data_readiness"]', text)
-        self.assertIn('tool_context.state["architecture_assessment"]', text)
-        self.assertIn('tool_context.state["policy_assessment"]', text)
-        self.assertIn('tool_context.state["business_case"]', text)
-        self.assertIn("load_architecture_catalog", text)
-        self.assertIn("load_policy_catalog", text)
+        self.assertIn('tool_context.state["business_context"]', context_tool)
+        self.assertIn('tool_context.state["project_classification"]', semantic_tool)
+        self.assertIn('tool_context.state["data_readiness"]', tools)
+        self.assertIn('tool_context.state["architecture_assessment"]', tools)
+        self.assertIn('tool_context.state["policy_assessment"]', tools)
+        self.assertIn('tool_context.state["business_case"]', tools)
+        self.assertIn("load_architecture_catalog", tools)
+        self.assertIn("load_policy_catalog", tools)
+        self.assertIn("gemini_semantic_extraction_plus_deterministic_mapping", semantic_tool)
 
     def test_runner_uses_in_memory_adk_sessions_for_feature54_mvp(self):
         text = RUNTIME.read_text()
@@ -66,6 +74,7 @@ class Feature54ContractTest(unittest.TestCase):
         self.assertIn('@app.get("/intake/governance-catalog")', text)
         self.assertIn("if not payload.confirmed", text)
         self.assertIn('business_case.get("ready_to_register")', text)
+        self.assertIn("business_case_to_validation_result", text)
         self.assertIn("create_demand_record", text)
         self.assertIn('API_VERSION = "0.8.0"', text)
 
