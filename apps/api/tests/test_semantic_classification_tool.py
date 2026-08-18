@@ -70,7 +70,7 @@ class SemanticClassificationToolTest(unittest.TestCase):
 
         self.assertEqual(result["primary_type"], "agentic_ai")
         self.assertEqual(result["agent_type"], "action_agent")
-        self.assertEqual(result["subtype"], "recommendation_agent")
+        self.assertEqual(result["subtype"], "action_agent")
         self.assertTrue(result["capabilities"]["writes_to_systems"])
 
     def test_unknown_when_no_capability_is_evidenced(self):
