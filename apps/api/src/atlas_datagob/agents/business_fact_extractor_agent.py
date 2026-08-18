@@ -32,7 +32,11 @@ class TurnBusinessFacts(BaseModel):
 business_fact_extractor_agent = Agent(
     name="atlas_business_fact_extractor",
     model=MODEL_NAME,
-    mode="single_turn",
+    # This extractor is invoked directly as the root of its own Runner. ADK 2.x
+    # requires direct Runner roots to use chat/task; single_turn is for delegated
+    # sub-agents or workflow nodes. The runtime still performs exactly one isolated
+    # invocation per user turn, so chat mode does not make this agent conversational.
+    mode="chat",
     description=(
         "Extracts explicit business facts from one user message into the canonical ATLAS Business Case schema."
     ),
