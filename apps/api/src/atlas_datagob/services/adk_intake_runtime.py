@@ -1,12 +1,36 @@
 """Runtime adapter between FastAPI and the Gemini ADK conversational intake."""
 from __future__ import annotations
 
+from typing import Any
 from uuid import uuid4
 
 APP_NAME = "atlas-datagob-intake"
 
 _session_service = None
 _runner = None
+
+
+class _StateToolContext:
+    """Minimal ToolContext-compatible wrapper for deterministic snapshot materialization."""
+
+    def __init__(self, state: dict[str, Any]) -> None:
+        self.state = state
+
+
+def materialize_business_case(state: dict[str, Any]) -> dict:
+    """Build a current Business Case snapshot from structured session state.
+
+    The conversational LLM is instructed to call build_business_case_snapshot itself,
+    but the API must never depend on that probabilistic choice to expose or register the
+    canonical artifact. This deterministic fallback keeps the UI and confirmation gate
+    consistent even when an LLM turn ends before invoking the snapshot tool.
+    """
+
+    from atlas_datagob.agents.conversational_intake_tools import build_business_case_snapshot
+
+    working_state = dict(state)
+    context = _StateToolContext(working_state)
+    return build_business_case_snapshot(context)  # type: ignore[arg-type]
 
 
 def _runtime():
@@ -89,11 +113,12 @@ async def run_intake_turn(*, user_id: str, message: str, session_id: str | None 
         session_id=resolved_session_id,
     )
     state = dict(session.state if session else {})
+    business_case = materialize_business_case(state)
 
     return {
         "session_id": resolved_session_id,
         "message": final_text,
-        "business_case": state.get("business_case", {}),
+        "business_case": business_case,
         "business_context": state.get("business_context", {}),
         "project_classification": state.get("project_classification", {}),
         "data_readiness": state.get("data_readiness", {}),
@@ -104,7 +129,7 @@ async def run_intake_turn(*, user_id: str, message: str, session_id: str | None 
 
 
 async def get_intake_session_state(*, user_id: str, session_id: str) -> dict:
-    """Return the structured ADK session state for diagnostics or explicit registration."""
+    """Return structured ADK session state with a deterministic canonical Business Case snapshot."""
 
     session_service, _ = _runtime()
     session = await session_service.get_session(
@@ -114,4 +139,7 @@ async def get_intake_session_state(*, user_id: str, session_id: str) -> dict:
     )
     if session is None:
         raise KeyError(session_id)
-    return dict(session.state)
+
+    state = dict(session.state)
+    state["business_case"] = materialize_business_case(state)
+    return state
