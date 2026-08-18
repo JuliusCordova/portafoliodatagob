@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from atlas_datagob.api.main import app
+from atlas_datagob.api import main as main_api
 from atlas_datagob.agents.policy_intake_agent import PolicyIntakeAgent
 from atlas_datagob.services.adk_intake_runtime import (
     get_intake_session_state,
@@ -30,6 +30,13 @@ except Exception:  # pragma: no cover
     Request = Any  # type: ignore
     BaseModel = object  # type: ignore
     Field = None  # type: ignore
+
+
+API_VERSION = "0.8.0"
+main_api.API_VERSION = API_VERSION
+app = main_api.app
+if app is not None:
+    app.version = API_VERSION
 
 
 class ConversationalIntakePayload(BaseModel):
@@ -174,6 +181,9 @@ async def register_business_case(payload: BusinessCaseRegistrationPayload, reque
         actor=context.user,
         comment="Caso de negocio confirmado por el usuario y registrado desde Gemini ADK Conversational Intake.",
     )
+    if demand is None:  # Defensive guard: creation and immediate governed update must be atomic from the caller perspective.
+        raise HTTPException(status_code=500, detail="Demand was created but could not be reloaded after Business Case update")
+
     return {
         "demand": demand,
         "business_case": business_case,
