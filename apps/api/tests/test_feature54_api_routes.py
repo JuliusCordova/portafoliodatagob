@@ -6,12 +6,15 @@ import tempfile
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from fastapi.testclient import TestClient
+try:
+    from fastapi.testclient import TestClient
+    from atlas_datagob.api.feature54_app import app
+except ImportError:  # Lightweight dependency-free CI still validates static contracts.
+    TestClient = None  # type: ignore[assignment]
+    app = None
 
-from atlas_datagob.api.feature54_app import app
 
-
-@unittest.skipIf(app is None, "FastAPI is not installed")
+@unittest.skipIf(app is None or TestClient is None, "FastAPI integration dependencies are not installed")
 class Feature54ApiRoutesTest(unittest.TestCase):
     def setUp(self) -> None:
         self.auth_patch = patch.dict(os.environ, {"ATLAS_AUTH_MODE": "disabled"})
