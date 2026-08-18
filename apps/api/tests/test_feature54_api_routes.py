@@ -127,7 +127,7 @@ class Feature54ApiRoutesTest(unittest.TestCase):
             demand["business_inputs"]["canonical_business_case"]["project_classification"]["subtype"],
             "executive_dashboard",
         )
-        event_types = [event["event_type"] for event in demand["events"]]
+        event_types = [event["type"] for event in demand["events"]]
         self.assertIn("status_changed", event_types)
 
     def test_local_governance_catalog_is_visible_as_safe_metadata(self):
