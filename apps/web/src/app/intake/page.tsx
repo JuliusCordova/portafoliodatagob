@@ -1,5 +1,6 @@
 import Link from "next/link";
 import ConversationalIntake from "../components/ConversationalIntake";
+import styles from "./page.module.css";
 
 export default function ConversationalIntakePage() {
   return (
@@ -21,8 +22,8 @@ export default function ConversationalIntakePage() {
         </aside>
       </section>
 
-      <nav className="view-tabs" aria-label="Navegación de ATLAS DataGob">
-        <Link className="active" href="/intake">Intake conversacional</Link>
+      <nav className={styles.nav} aria-label="Navegación de ATLAS DataGob">
+        <Link href="/intake">Intake conversacional</Link>
         <Link href="/">Portafolio y comités</Link>
       </nav>
 
