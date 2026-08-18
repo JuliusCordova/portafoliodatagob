@@ -51,6 +51,8 @@ class Feature54ContractTest(unittest.TestCase):
 
         self.assertIn("class TurnBusinessFacts(BaseModel)", extractor)
         self.assertIn("business_fact_extractor_agent = Agent(", extractor)
+        self.assertIn('mode="chat"', extractor)
+        self.assertNotIn('mode="single_turn"', extractor)
         self.assertIn("output_schema=TurnBusinessFacts", extractor)
         self.assertIn("_extract_turn_business_facts", runtime)
         self.assertIn("EventActions", runtime)
