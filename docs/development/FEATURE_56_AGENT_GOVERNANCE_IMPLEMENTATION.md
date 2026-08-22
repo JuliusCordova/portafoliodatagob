@@ -8,7 +8,7 @@ PR: `#61`
 
 **IMPLEMENTATION COMPLETE FOR ISOLATED PREVIEW VALIDATION**
 
-The Feature 56 implementation now contains the first working ATLAS control plane dedicated to governance of Google ADK deployments. Stable ATLAS services have not been modified or promoted.
+Feature 56 now contains the first working ATLAS control plane dedicated to governance of Google ADK deployments. Stable ATLAS services have not been modified or promoted.
 
 ## Product boundary
 
@@ -24,14 +24,14 @@ The implementation preserves the approved V1 boundary:
 
 ## Real estate baseline
 
-The prior read-only spike against `proyectopersonal-480420/us-central1` returned:
+The read-only spike against `proyectopersonal-480420/us-central1` returned:
 
 ```text
 total_reasoning_engines = 24
 total_google_adk        = 23
 ```
 
-The implementation therefore models the provider resource as `ObservedDeployment`, not as `GovernedAgent`.
+The provider resource is therefore modeled as `ObservedDeployment`, not as `GovernedAgent`.
 
 ```text
 GovernedAgent
@@ -55,6 +55,7 @@ ObservedDeployment
 - uses Application Default Credentials at runtime;
 - maps Reasoning Engine resources to canonical `ObservedDeployment` records;
 - preserves provider facts such as resource id, display name, service account, timestamps and provider-declared deployment source;
+- supports the direct `packageSpec` representation validated in the real estate;
 - leaves model/status/governance fields null or ATLAS-owned when Google does not expose them canonically;
 - never invokes or changes an agent.
 
@@ -77,6 +78,8 @@ Preview deployment overrides them with `_f56_preview` suffixes.
 
 The repository preserves provider history: deployments missing from a future refresh are marked `not_observed` instead of being deleted.
 
+Governance finding history is also preserved. A new assessment closes previous open findings as `superseded_by_reassessment` and appends the current findings; it does not erase prior evidence.
+
 ### Governance service
 
 `apps/api/src/atlas_datagob/services/agent_governance_service.py`
@@ -91,6 +94,8 @@ Responsibilities:
 - execute deterministic governance assessments;
 - load applicable controls from the existing versioned ATLAS governance catalog;
 - persist findings/evidence state.
+
+Policy references in findings are resolved from the active catalog `id@version`; the assessment does not hard-code a policy version.
 
 The LLM is not a source of truth for the `governed` decision.
 
@@ -181,9 +186,11 @@ During implementation CI detected and drove corrections to:
 
 1. lazy-load runtime `httpx` so the dependency-light API unit-test runner remains valid;
 2. preserve Feature 54 container-contract evidence while starting the Feature 56 extension;
-3. remove nullable Agent Drawer typing ambiguity in the Web app.
+3. remove nullable Agent Drawer typing ambiguity in the Web app;
+4. align deployment-source normalization with the real `packageSpec` provider contract;
+5. verify policy-version propagation independently from hard-coded `1.0` assumptions.
 
-The implementation must remain 4/4 green before preview execution.
+The final implementation head must remain 4/4 green before preview execution.
 
 ## Preview deployment
 
