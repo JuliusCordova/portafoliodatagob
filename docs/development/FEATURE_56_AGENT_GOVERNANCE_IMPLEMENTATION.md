@@ -6,9 +6,9 @@ PR: `#61`
 
 ## Status
 
-**IMPLEMENTATION COMPLETE FOR ISOLATED PREVIEW VALIDATION**
+**IMPLEMENTATION + ISOLATED PREVIEW + CONTROLLED FUNCTIONAL E2E: PASS**
 
-Feature 56 now contains the first working ATLAS control plane dedicated to governance of Google ADK deployments. Stable ATLAS services have not been modified or promoted.
+Feature 56 contains the first working ATLAS control plane dedicated to governance of Google ADK deployments. Stable ATLAS services have not been modified or promoted.
 
 ## Product boundary
 
@@ -78,7 +78,7 @@ Preview deployment overrides them with `_f56_preview` suffixes.
 
 The repository preserves provider history: deployments missing from a future refresh are marked `not_observed` instead of being deleted.
 
-Governance finding history is also preserved. A new assessment closes previous open findings as `superseded_by_reassessment` and appends the current findings; it does not erase prior evidence.
+Governance finding history is also preserved. A new assessment closes previous open findings and appends the current findings; it does not erase prior evidence.
 
 ### Governance service
 
@@ -190,80 +190,142 @@ During implementation CI detected and drove corrections to:
 4. align deployment-source normalization with the real `packageSpec` provider contract;
 5. verify policy-version propagation independently from hard-coded `1.0` assumptions.
 
-A prior implementation checkpoint was 4/4 green across API tests, Web build, Container build and Deploy scripts. Because evidence-preservation and policy-version refinements were added afterward, **the exact final branch head must independently return 4/4 green before executing the preview**.
+Feature code SHA `077d08b5b5ee0b92bd95c8174afd6ced6e382b9b` reached 4/4 green before preview execution across API tests, Web build, Container build and Deploy scripts.
 
-## Preview deployment
+## Isolated preview — PASS
 
-Script:
+Cloud Build:
 
 ```text
-scripts/cloud_run/deploy_feature56_preview.sh
+BUILD_ID: 5e0cf6af-94b3-47a1-9fc9-44aae34f1557
+STATUS: SUCCESS
 ```
 
-It builds immutable images from the current branch SHA and deploys only:
+Preview services:
 
 ```text
 atlas-datagob-api-f56-preview
 atlas-datagob-web-f56-preview
 ```
 
-Stable services are not changed:
+Validated revisions:
 
 ```text
-atlas-datagob-api
-atlas-datagob-web
+API revision: atlas-datagob-api-f56-preview-00001-rm9
+Web revision: atlas-datagob-web-f56-preview-00001-gsx
 ```
 
-Preview Firestore collections are isolated:
+Preview Firestore collections are isolated with `_f56_preview` suffixes.
+
+Preview validation result:
 
 ```text
-atlas_agent_deployments_f56_preview
-atlas_agents_f56_preview
-atlas_agent_deployment_bindings_f56_preview
-atlas_agent_governance_f56_preview
-atlas_agent_governance_events_f56_preview
-atlas_agent_findings_f56_preview
-atlas_demands_f56_preview
+API health                         PASS · ATLAS DataGob 0.9.0
+Real Google ADK discovery          PASS · 23 deployments
+Persisted deployment count        PASS · 23
+Web /agent-governance              PASS · HTTP 200
+Web -> API proxy                   PASS · deployments_adk=23
+Automatic logical agent creation  PASS · 0
+Stable services modified          NO
 ```
 
-The script performs, in order:
+A `gcloud --set-env-vars` escaping issue with comma-separated Web roles was found in the first Web deploy attempt. The script was hardened to use `--env-vars-file`, and the already-built validated Web image was deployed without rebuilding Feature code.
 
-1. immutable Cloud Build of API + Web;
-2. API preview deployment;
-3. `/health` smoke;
-4. read-only Agent Platform discovery;
-5. persistence-count validation;
-6. Web preview deployment;
-7. `/agent-governance` HTTP smoke;
-8. Web → API proxy validation;
-9. prints the direct Agent Governance preview URL only after all checks pass.
+## Controlled functional E2E — PASS
 
-## Preview acceptance gate
-
-Preview is considered conforming only when:
+Script:
 
 ```text
-API health                       PASS
-Agent Governance summary         PASS
-ADK discovery                    >= 1 deployment
-Persisted count                  == discovery count
-Web /agent-governance            HTTP 200
-Web -> API proxy deployment KPI  == discovery count
-Stable service names             untouched
+scripts/cloud_run/validate_feature56_preview_e2e.sh
 ```
 
-For the currently observed estate, the expected discovery count is 23. The check intentionally validates the live result rather than hard-coding 23 so the product remains correct when new ADK deployments appear.
+Real observed deployment used:
 
-## Next checkpoint
+```text
+google-adk:8881601491744325632
+Ayniq IaC Agent candidate 2026.08.10-06
+```
 
-Run the isolated preview script from Cloud Shell on a clean Feature 56 branch only after the final head is 4/4 green. After it prints `FEATURE 56 PREVIEW: CONFORME`, capture exact build/revisions/URLs and perform visual validation of:
+Logical governed identity created:
 
-1. deployments-first state;
-2. unbound filter;
-3. explicit logical-agent creation;
-4. deployment binding;
-5. governance-profile editing;
-6. deterministic assessment + findings;
-7. linked deployment history.
+```text
+AGT-D28B3CDD
+Ayniq IaC Agent · Feature 56 E2E
+```
 
-Only after that E2E checkpoint can PR #61 be considered implementation-complete. Merge/promotion remain separate decisions.
+Human-confirmed binding:
+
+```text
+ADB-4E547135
+binding_source=human_confirmed
+environment=preview
+is_current=true
+```
+
+Phase 1 intentionally omitted mandatory-control evidence:
+
+```text
+status=action_required
+score=90
+mandatory_controls_registered=false
+open finding=AGF-F9A6FA7934
+```
+
+Phase 2 registered the mandatory controls from the versioned ATLAS governance catalog and reassessed:
+
+```text
+status=governed
+score=100
+mandatory_controls_registered=true
+open findings=0
+```
+
+The prior finding was preserved as historical evidence and closed:
+
+```text
+finding_id=AGF-F9A6FA7934
+status=closed
+resolved_at=2026-08-22T01:16:56+00:00
+```
+
+Final estate state:
+
+```text
+deployments_adk=23
+deployments_unbound=22
+governed_agents=1
+governed_compliant=1
+action_required=0
+open_findings=0
+```
+
+Runtime boundary remained intact:
+
+```text
+RUNTIME_AGENT_MODIFIED=false
+```
+
+Detailed evidence:
+
+```text
+docs/deployment/evidence/FEATURE_56_CONTROLLED_E2E_CHECKPOINT_2026-08-22.md
+```
+
+## Remaining checkpoint
+
+The only pre-merge acceptance checkpoint still pending is visual validation of the isolated Web preview:
+
+```text
+https://atlas-datagob-web-f56-preview-mkqutd4koq-uc.a.run.app/agent-governance
+```
+
+Visual validation should confirm:
+
+1. KPI row reflects `23 / 22 / 1` and one compliant governed identity;
+2. `Agentes` tab shows `Ayniq IaC Agent · Feature 56 E2E` as governed;
+3. governed-agent drawer shows risk `medium`, autonomy `l1`, linked deployment and historical closed finding;
+4. `Deployments` tab shows the selected Reasoning Engine as bound and the remaining 22 as unbound;
+5. no runtime-enforcement actions such as pause/kill/disable writes appear;
+6. layout, responsive behavior and executive readability are acceptable.
+
+Only after that visual checkpoint should PR #61 move out of Draft. Merge/promotion remain separate decisions.
