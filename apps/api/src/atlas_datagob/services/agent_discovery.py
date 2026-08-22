@@ -20,6 +20,15 @@ class AgentDiscoveryProvider(Protocol):
 
 def _deployment_source_kind(spec: dict) -> str | None:
     """Return only provider-declared deployment source semantics."""
+    if spec.get("packageSpec") is not None or spec.get("package_spec") is not None:
+        return "package"
+    if spec.get("sourceCodeSpec") is not None or spec.get("source_code_spec") is not None:
+        return "source_code"
+    if spec.get("containerSpec") is not None or spec.get("container_spec") is not None:
+        return "container"
+
+    # Defensive compatibility for alternate provider representations while the
+    # canonical 2026-08-22 estate uses direct *Spec fields.
     source = spec.get("deploymentSource") or spec.get("deployment_source")
     if not isinstance(source, dict):
         return None
@@ -163,7 +172,10 @@ class GoogleAdkDiscoveryProvider:
                     "discovery_status": "discovered",
                     "binding_status": "unbound",
                     "governed_agent_id": None,
-                    "observed_metadata": {"etag": engine.get("etag")},
+                    "observed_metadata": {
+                        "etag": engine.get("etag"),
+                        "class_method_count": len(spec.get("classMethods") or []),
+                    },
                 }
             )
         return deployments
