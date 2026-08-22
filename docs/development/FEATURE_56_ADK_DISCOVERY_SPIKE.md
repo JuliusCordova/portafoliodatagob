@@ -1,174 +1,121 @@
 # Feature 56 — ADK Discovery Spike
 
 ## Objective
+Validate, with a read-only spike against the real Google Cloud estate, what Google Agent Platform / Reasoning Engine metadata can be used by ATLAS to build the new Agent Governance screen without modifying or instrumenting individual agents.
 
-Validate, against the real Google Cloud project used by ATLAS, which Google ADK agents can be discovered without modifying or instrumenting the governed agents, and close the `ObservedAgent` contract using only metadata exposed by Google Agent Platform / Vertex AI.
+## Scope
 
-This spike is **read-only**. It must not create, update, invoke, pause or delete any agent.
+- Google Cloud project: `proyectopersonal-480420`
+- Region: `us-central1`
+- Discovery source: Agent Platform / Reasoning Engines
+- Framework filter: `spec.agentFramework=google-adk`
+- Operation mode: read-only
 
-## Product decision under validation
+## Execution
 
-> ATLAS Agent Governance is an out-of-band governance control plane. Discovery must work from platform metadata and must not require an ATLAS SDK or custom callback inside each governed agent.
-
-## Current Google platform baseline
-
-As of 2026-08-21, Google Agent Platform exposes deployed agent runtimes as `reasoningEngines` and provides a GA `v1` list operation scoped by project and location.
-
-Canonical list resource:
-
-```text
-GET https://<location>-aiplatform.googleapis.com/v1/projects/<project>/locations/<location>/reasoningEngines
-```
-
-The resource contract currently exposes, among other fields:
-
-- `name`;
-- `displayName`;
-- `description`;
-- `createTime`;
-- `updateTime`;
-- `etag`;
-- `labels`;
-- `spec.agentFramework`;
-- `spec.identityType`;
-- `spec.serviceAccount`;
-- deployment-source information in `spec`.
-
-`spec.agentFramework` can identify `google-adk` distinctly from other supported frameworks. ATLAS V1 therefore filters the discovered estate to `google-adk` while keeping the provider boundary generic.
-
-The current Agent Platform Python SDK also exposes `client.agent_engines.list(...)`. The V1 discovery spike intentionally uses the REST contract plus the active `gcloud` access token so it can be executed from Cloud Shell without introducing a new application dependency.
-
-## Script
-
-```text
-scripts/spikes/feature56_discover_adk_agents.sh
-```
-
-Properties:
-
-- read-only;
-- paginates all Reasoning Engines in the configured project/location;
-- filters only `spec.agentFramework == "google-adk"`;
-- preserves a raw response file under `/tmp`;
-- creates a normalized `ObservedAgent` candidate JSON under `/tmp`;
-- does not infer model, runtime health or governance metadata when the platform does not expose them directly;
-- initializes governance state as `not_assessed` without changing the provider resource.
-
-## Candidate ObservedAgent contract
-
-```json
-{
-  "provider_agent_id": "<reasoning-engine-id>",
-  "resource_name": "projects/.../locations/.../reasoningEngines/...",
-  "display_name": "...",
-  "description": "...",
-  "framework": "google-adk",
-  "runtime_type": "vertex_ai_agent_engine",
-  "project_id": "...",
-  "location": "...",
-  "deployment_target": "reasoning_engine",
-  "model_name": null,
-  "resource_status": null,
-  "created_at": "...",
-  "updated_at": "...",
-  "labels": {},
-  "service_account": null,
-  "identity_type": null,
-  "deployment_source_kind": null,
-  "discovery_source": "aiplatform.v1.projects.locations.reasoningEngines.list",
-  "last_observed_at": "...",
-  "governance_status": "not_assessed"
-}
-```
-
-### Important semantic rule
-
-`model_name` and `resource_status` remain nullable unless the real provider response exposes a trustworthy value. ATLAS must not infer them from display names, descriptions, labels or previous knowledge.
-
-## Real-environment execution
-
-From Cloud Shell:
+Command:
 
 ```bash
-cd ~/portafoliodatagob
-
-git fetch origin
-git switch feature/56-adk-agent-governance-spec
-git pull --ff-only origin feature/56-adk-agent-governance-spec
-
-chmod +x scripts/spikes/feature56_discover_adk_agents.sh
-
 PROJECT=proyectopersonal-480420 \
 REGION=us-central1 \
 ./scripts/spikes/feature56_discover_adk_agents.sh
 ```
 
-The expected terminal result ends with:
+Execution timestamp: `2026-08-22T00:08:57Z`
+
+Generated files:
 
 ```text
+RAW_FILE=/tmp/atlas-f56-agent-engines-20260822T000857Z.json
+OUT_FILE=/tmp/atlas-f56-observed-agents-20260822T000857Z.json
+```
+
+## Result
+
+```text
+total_reasoning_engines: 24
+total_google_adk: 23
 [PASS] Discovery completed. No agent was modified.
 ```
 
-The script also prints `OUT_FILE=<path>`. That normalized JSON becomes the evidence required to close the discovery contract.
+## Confirmed metadata
 
-## Validation questions
+The spike confirmed that ATLAS can normalize, for the current estate:
 
-The spike is accepted when the real output answers all of the following:
+- provider resource id;
+- display name;
+- ADK framework;
+- create/update timestamps;
+- runtime service account;
+- deployment source kind;
+- project and location from discovery scope.
 
-1. Can ATLAS enumerate the existing deployed Agent Platform resources in `proyectopersonal-480420/us-central1`?
-2. Does `spec.agentFramework` reliably identify the ADK subset?
-3. Are `name`, `displayName`, timestamps and labels populated consistently enough for inventory use?
-4. Is `spec.serviceAccount` exposed for the deployed agents we currently have?
-5. Which deployment-source representation is actually present in the environment?
-6. Which fields in the initial Feature 56 SPEC must remain governance-owned because Google does not expose them?
-7. Is the Reasoning Engine resource name stable enough to be the provider-side join key?
+All 23 ADK resources returned `deployment_source_kind=package`.
 
-## Expected design outcome
+## Estate observed
 
-After the real run, the Feature 56 domain model will separate data into two explicit layers:
+### Ayniq
 
-### Observed platform metadata
+19 ADK Reasoning Engines were discovered across multiple candidate deployments for `Ayniq IaC Agent` and `Ayniq Plan Reviewer`.
 
-Read-only facts discovered from Google:
+Runtime service account:
 
-- provider/resource identity;
-- display metadata;
-- framework;
-- project/location;
-- timestamps;
-- labels;
-- runtime identity configuration;
-- deployment-source metadata where available.
+```text
+ayn-iac-agent-runtime@proyectopersonal-480420.iam.gserviceaccount.com
+```
 
-### ATLAS governance metadata
+### PrimaDemo
 
-Owned by ATLAS and never inferred from the provider unless explicitly configured:
+4 ADK Reasoning Engines were discovered across multiple versions/candidates of `PrimaDemo Financial Journey`.
 
-- business owner;
-- technical owner;
+Runtime service account:
+
+```text
+primademo-agent-runtime@proyectopersonal-480420.iam.gserviceaccount.com
+```
+
+## Critical architecture finding
+
+The spike proves that a Reasoning Engine must be modeled as an **observed deployment**, not automatically as the logical business agent.
+
+Multiple Reasoning Engines correspond to historical candidates/versions of the same logical product capability. Counting every resource as one governed agent would inflate the corporate agent estate.
+
+The canonical model is therefore:
+
+```text
+GovernedAgent
+      |
+      | 0..N
+      v
+AgentDeploymentBinding
+      |
+      v
+ObservedDeployment
+```
+
+The detailed frozen contract is documented in:
+
+`docs/specs/15-adk-discovery-real-contract.md`
+
+## Governance metadata boundary
+
+The following must not be inferred from the discovery result unless another approved canonical source exists:
+
+- Business Owner;
+- Technical Owner;
 - business purpose;
-- business domain;
-- criticality;
-- autonomy level;
-- risk classification;
-- human-oversight requirements;
+- risk;
+- autonomy;
+- Human-in-the-Loop;
 - data classification;
-- applicable policies;
-- governance findings;
-- governance status;
-- governance evidence.
+- exact model;
+- authorized tools;
+- compliance status.
 
-## Non-goals of this spike
+These remain explicit ATLAS governance metadata.
 
-- No AgentOps instrumentation.
-- No session/run enumeration yet.
-- No tool interception.
-- No prompt inspection.
-- No policy enforcement.
-- No kill switch.
-- No changes to existing ADK agents.
-- No production UI changes.
+## Conclusion
 
-## Exit criterion
+**SPIKE PASS.**
 
-The spike is complete when a real normalized discovery output is captured and the `ObservedAgent` schema can be frozen without invented provider fields.
+The environment provides enough official metadata to implement out-of-band ADK discovery. Feature 56 can proceed without SDK injection or agent-specific integration, using the separation between logical governed agents and observed provider deployments.
