@@ -17,4 +17,4 @@ COPY docs/api ./docs/api
 
 EXPOSE 8080
 
-CMD ["sh", "-c", "uvicorn atlas_datagob.api.feature54_app:app --host 0.0.0.0 --port ${PORT:-8080}"]
+CMD ["sh", "-c", "uvicorn atlas_datagob.api.feature56_app:app --host 0.0.0.0 --port ${PORT:-8080}"]
