@@ -9,8 +9,6 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Protocol
 
-import httpx
-
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
@@ -18,15 +16,6 @@ def utc_now() -> str:
 
 class AgentDiscoveryProvider(Protocol):
     def list_deployments(self) -> list[dict]: ...
-
-
-def _nested(payload: dict, *path: str) -> Any:
-    current: Any = payload
-    for key in path:
-        if not isinstance(current, dict):
-            return None
-        current = current.get(key)
-    return current
 
 
 def _deployment_source_kind(spec: dict) -> str | None:
@@ -55,7 +44,7 @@ class GoogleAdkDiscoveryProvider:
         project_id: str | None = None,
         location: str | None = None,
         access_token: str | None = None,
-        client: httpx.Client | None = None,
+        client: Any | None = None,
     ) -> None:
         self.project_id = (
             project_id
@@ -96,8 +85,17 @@ class GoogleAdkDiscoveryProvider:
             f"projects/{self.project_id}/locations/{self.location}/reasoningEngines"
         )
 
+    def _runtime_client(self) -> Any:
+        if self._client is not None:
+            return self._client
+        try:
+            import httpx  # type: ignore
+        except ImportError as exc:  # pragma: no cover - runtime dependency installed by Docker image
+            raise RuntimeError("Feature 56 discovery requires httpx at runtime") from exc
+        return httpx.Client(timeout=30.0)
+
     def _raw_engines(self) -> list[dict]:
-        client = self._client or httpx.Client(timeout=30.0)
+        client = self._runtime_client()
         close_client = self._client is None
         token = self._token()
         page_token: str | None = None
@@ -165,9 +163,7 @@ class GoogleAdkDiscoveryProvider:
                     "discovery_status": "discovered",
                     "binding_status": "unbound",
                     "governed_agent_id": None,
-                    "observed_metadata": {
-                        "etag": engine.get("etag"),
-                    },
+                    "observed_metadata": {"etag": engine.get("etag")},
                 }
             )
         return deployments
