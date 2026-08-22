@@ -32,6 +32,12 @@ def _policy_contract() -> tuple[list[str], list[str]]:
     return list(dict.fromkeys(policies)), list(dict.fromkeys(controls))
 
 
+def _policy_ref_for(policy_refs: list[str], policy_id: str) -> str | None:
+    """Resolve the active catalog version instead of hard-coding a policy version."""
+    prefix = f"{policy_id}@"
+    return next((reference for reference in policy_refs if reference.startswith(prefix)), None)
+
+
 def _parse_date(value: Any) -> datetime | None:
     if not isinstance(value, str) or not value.strip():
         return None
@@ -145,17 +151,19 @@ class AgentGovernanceService:
         score = round(sum(1 for value in checks.values() if value) / len(checks) * 100)
         status = "governed" if all(checks.values()) else "action_required"
 
+        data_policy_ref = _policy_ref_for(policy_refs, "DATA-001")
+        agent_policy_ref = _policy_ref_for(policy_refs, "AGENT-001")
         mapping = {
-            "ownership_defined": ("Definir Business Owner y Technical Owner", "high", "DATA-001@1.0"),
-            "business_purpose_defined": ("Documentar el propósito de negocio del agente", "medium", "AGENT-001@1.0"),
-            "risk_assessed": ("Completar la evaluación de riesgo", "high", "AGENT-001@1.0"),
-            "autonomy_declared": ("Declarar el nivel de autonomía", "high", "AGENT-001@1.0"),
-            "human_oversight_defined": ("Definir Human-in-the-Loop / supervisión humana", "high", "AGENT-001@1.0"),
-            "data_classification_declared": ("Declarar la clasificación de los datos utilizados", "high", "DATA-001@1.0"),
+            "ownership_defined": ("Definir Business Owner y Technical Owner", "high", data_policy_ref),
+            "business_purpose_defined": ("Documentar el propósito de negocio del agente", "medium", agent_policy_ref),
+            "risk_assessed": ("Completar la evaluación de riesgo", "high", agent_policy_ref),
+            "autonomy_declared": ("Declarar el nivel de autonomía", "high", agent_policy_ref),
+            "human_oversight_defined": ("Definir Human-in-the-Loop / supervisión humana", "high", agent_policy_ref),
+            "data_classification_declared": ("Declarar la clasificación de los datos utilizados", "high", data_policy_ref),
             "policies_identified": ("No se encontraron políticas aplicables en el catálogo gobernado", "critical", None),
-            "mandatory_controls_registered": ("Registrar evidencia de los controles obligatorios aplicables", "high", "AGENT-001@1.0"),
-            "deployment_evidence_available": ("Asociar al menos un deployment ADK observado", "medium", "AGENT-001@1.0"),
-            "review_scheduled": ("Programar la próxima revisión de gobierno", "medium", "AGENT-001@1.0"),
+            "mandatory_controls_registered": ("Registrar evidencia de los controles obligatorios aplicables", "high", agent_policy_ref),
+            "deployment_evidence_available": ("Asociar al menos un deployment ADK observado", "medium", agent_policy_ref),
+            "review_scheduled": ("Programar la próxima revisión de gobierno", "medium", agent_policy_ref),
         }
         findings = [
             _finding(agent_id, key=key, title=mapping[key][0], severity=mapping[key][1], policy_ref=mapping[key][2])
@@ -173,12 +181,6 @@ class AgentGovernanceService:
             "finding_ids": [item["finding_id"] for item in findings],
             "evaluated_at": utc_now(),
             "evaluator": "deterministic",
-        }
-        profile_update = {
-            "applicable_policies": policy_refs,
-            "required_controls": list(dict.fromkeys([*profile.get("required_controls", []), *mandatory_controls]))
-            if profile.get("required_controls_confirmed") is True
-            else profile.get("required_controls", []),
         }
         # Applicable policy references are source-of-truth catalog facts. Required controls
         # are not auto-marked as satisfied; they remain explicit governance evidence.
