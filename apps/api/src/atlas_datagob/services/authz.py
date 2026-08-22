@@ -39,6 +39,14 @@ READ_ONLY_PERMISSIONS = {
     "metadata:read",
     "ops:read",
     "policy:read",
+    "agent_governance:read",
+}
+
+_AGENT_GOVERNANCE_OPERATOR_PERMISSIONS = {
+    "agent_governance:edit",
+    "agent_governance:bind",
+    "agent_governance:assess",
+    "agent_governance:refresh",
 }
 
 PERMISSIONS_BY_ROLE: dict[str, set[str]] = {
@@ -52,6 +60,7 @@ PERMISSIONS_BY_ROLE: dict[str, set[str]] = {
     },
     ROLE_DATA_STEWARD: {
         *READ_ONLY_PERMISSIONS,
+        *_AGENT_GOVERNANCE_OPERATOR_PERMISSIONS,
         "demo:reset",
         "synthetic:generate",
         "demand:create",
@@ -63,6 +72,7 @@ PERMISSIONS_BY_ROLE: dict[str, set[str]] = {
     },
     ROLE_DATA_ARCHITECT: {
         *READ_ONLY_PERMISSIONS,
+        *_AGENT_GOVERNANCE_OPERATOR_PERMISSIONS,
         "demand:update",
         "demand:status:update",
         "demand:score",
@@ -127,13 +137,11 @@ class AuthContext:
 
 def auth_mode() -> str:
     """Return the configured authentication mode."""
-
     return os.getenv("ATLAS_AUTH_MODE", AUTH_MODE_DISABLED).strip().lower()
 
 
 def validate_auth_configuration() -> None:
     """Fail fast when the configured auth mode is unsupported."""
-
     mode = auth_mode()
     if mode not in SUPPORTED_AUTH_MODES:
         supported = ", ".join(sorted(SUPPORTED_AUTH_MODES))
@@ -142,7 +150,6 @@ def validate_auth_configuration() -> None:
 
 def _public_context() -> AuthContext:
     """Return an unauthenticated context for public routes."""
-
     validate_auth_configuration()
     return AuthContext(user="public", roles=(), mode=auth_mode(), authenticated=False)
 
@@ -158,7 +165,6 @@ def _split_roles(raw_roles: str | None) -> tuple[str, ...]:
 
 def context_from_headers(headers: Mapping[str, str] | None = None) -> AuthContext:
     """Resolve auth context from headers according to the configured auth mode."""
-
     validate_auth_configuration()
     mode = auth_mode()
     if mode == AUTH_MODE_DISABLED:
@@ -183,14 +189,12 @@ def context_from_headers(headers: Mapping[str, str] | None = None) -> AuthContex
 
 def has_permission(context: AuthContext, permission: str) -> bool:
     """Return whether a context has a permission."""
-
     permissions = context.permissions()
     return "*" in permissions or permission in permissions
 
 
 def require_permission(context: AuthContext, permission: str) -> None:
     """Raise AuthorizationError when the context lacks a permission."""
-
     if not has_permission(context, permission):
         raise AuthorizationError(f"User {context.user} lacks required permission: {permission}")
 
@@ -202,7 +206,6 @@ def permission_for_request(method: str, path: str) -> str | None:
     platform probes, browser CORS and API documentation should still work before
     an identity provider is wired.
     """
-
     method = method.upper()
     path = path.rstrip("/") or "/"
 
@@ -233,6 +236,20 @@ def permission_for_request(method: str, path: str) -> str | None:
         return "policy:read"
     if path == "/intake/business-case/register" and method == "POST":
         return "demand:create"
+
+    if path == "/agent-governance/discovery/refresh" and method == "POST":
+        return "agent_governance:refresh"
+    if path == "/agent-governance/agents" and method == "POST":
+        return "agent_governance:edit"
+    if path.startswith("/agent-governance/agents/") and path.endswith("/profile") and method == "PATCH":
+        return "agent_governance:edit"
+    if path.startswith("/agent-governance/agents/") and path.endswith("/deployments/bind") and method == "POST":
+        return "agent_governance:bind"
+    if path.startswith("/agent-governance/agents/") and path.endswith("/assess") and method == "POST":
+        return "agent_governance:assess"
+    if path.startswith("/agent-governance/") and method == "GET":
+        return "agent_governance:read"
+
     if path == "/demands/validate-and-create" and method == "POST":
         return "demand:create"
     if path == "/demands/backlog" and method == "GET":
@@ -257,11 +274,9 @@ def permission_for_request(method: str, path: str) -> str | None:
 
 def authorize_request(method: str, path: str, headers: Mapping[str, str] | None = None) -> AuthContext:
     """Authorize an HTTP request and return the resolved auth context."""
-
     permission = permission_for_request(method, path)
     if permission is None:
         return _public_context()
-
     context = context_from_headers(headers)
     require_permission(context, permission)
     return context
@@ -269,7 +284,6 @@ def authorize_request(method: str, path: str, headers: Mapping[str, str] | None 
 
 def auth_snapshot() -> dict:
     """Return a safe snapshot of the configured auth model."""
-
     validate_auth_configuration()
     return {
         "mode": auth_mode(),

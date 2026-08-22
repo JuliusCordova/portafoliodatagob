@@ -32,6 +32,11 @@ const navigationItems: NavigationItem[] = [
     guardrail: "Requiere rol de negocio, stewardship o arquitectura para registrar demanda"
   },
   {
+    href: "/agent-governance",
+    label: "Gobierno de agentes",
+    description: "Estate ADK, riesgo, ownership, políticas y evidencia"
+  },
+  {
     href: "/",
     label: "Dashboard principal",
     description: "Backlog, scoring y vista ejecutiva"
