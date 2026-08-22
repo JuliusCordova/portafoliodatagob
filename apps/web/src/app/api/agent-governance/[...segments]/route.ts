@@ -13,9 +13,9 @@ async function proxy(request: Request, context: RouteContext) {
   const method = request.method.toUpperCase();
 
   try {
-    const headers = atlasIdentityHeaders(request);
+    const headers: Record<string, string> = { ...atlasIdentityHeaders(request) };
     const contentType = request.headers.get("content-type");
-    if (contentType) headers.set("content-type", contentType);
+    if (contentType) headers["content-type"] = contentType;
     const body = method === "GET" || method === "HEAD" ? undefined : await request.text();
     const response = await fetch(target, {
       method,
