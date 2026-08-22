@@ -190,7 +190,7 @@ During implementation CI detected and drove corrections to:
 4. align deployment-source normalization with the real `packageSpec` provider contract;
 5. verify policy-version propagation independently from hard-coded `1.0` assumptions.
 
-The final implementation head must remain 4/4 green before preview execution.
+A prior implementation checkpoint was 4/4 green across API tests, Web build, Container build and Deploy scripts. Because evidence-preservation and policy-version refinements were added afterward, **the exact final branch head must independently return 4/4 green before executing the preview**.
 
 ## Preview deployment
 
@@ -256,7 +256,7 @@ For the currently observed estate, the expected discovery count is 23. The check
 
 ## Next checkpoint
 
-Run the isolated preview script from Cloud Shell on a clean Feature 56 branch. After it prints `FEATURE 56 PREVIEW: CONFORME`, capture the exact build/revisions/URLs and perform visual validation of:
+Run the isolated preview script from Cloud Shell on a clean Feature 56 branch only after the final head is 4/4 green. After it prints `FEATURE 56 PREVIEW: CONFORME`, capture exact build/revisions/URLs and perform visual validation of:
 
 1. deployments-first state;
 2. unbound filter;
