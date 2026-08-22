@@ -41,7 +41,8 @@ API_IMAGE="${REGION}-docker.pkg.dev/${PROJECT}/${AR_REPOSITORY}/atlas-datagob-ap
 WEB_IMAGE="${REGION}-docker.pkg.dev/${PROJECT}/${AR_REPOSITORY}/atlas-datagob-web:${TAG}"
 
 BUILD_CONFIG="$(mktemp /tmp/atlas-f56-cloudbuild.XXXXXX.yaml)"
-cleanup() { rm -f "$BUILD_CONFIG"; }
+WEB_ENV_FILE="$(mktemp /tmp/atlas-f56-web-env.XXXXXX.yaml)"
+cleanup() { rm -f "$BUILD_CONFIG" "$WEB_ENV_FILE"; }
 trap cleanup EXIT
 
 cat > "$BUILD_CONFIG" <<YAML
@@ -105,6 +106,13 @@ if [[ "$DEPLOYMENT_COUNT" != "$TOTAL_ADK" ]]; then
   exit 1
 fi
 
+cat > "$WEB_ENV_FILE" <<YAML
+ATLAS_INTERNAL_API_BASE: "${API_URL}"
+ATLAS_WEB_IDENTITY_MODE: "static"
+ATLAS_WEB_DEMO_USER: "feature56.preview@atlas.local"
+ATLAS_WEB_DEMO_ROLES: "data_steward,data_architect,executive"
+YAML
+
 echo "=== DEPLOY WEB PREVIEW ==="
 gcloud run deploy "$WEB_SERVICE" \
   --project "$PROJECT" \
@@ -112,7 +120,7 @@ gcloud run deploy "$WEB_SERVICE" \
   --platform managed \
   --image "$WEB_IMAGE" \
   --allow-unauthenticated \
-  --set-env-vars "ATLAS_INTERNAL_API_BASE=${API_URL},ATLAS_WEB_IDENTITY_MODE=static,ATLAS_WEB_DEMO_USER=feature56.preview@atlas.local,ATLAS_WEB_DEMO_ROLES=data_steward,data_architect,executive"
+  --env-vars-file "$WEB_ENV_FILE"
 
 WEB_URL="$(gcloud run services describe "$WEB_SERVICE" --project "$PROJECT" --region "$REGION" --format='value(status.url)')"
 if [[ -z "$WEB_URL" ]]; then
