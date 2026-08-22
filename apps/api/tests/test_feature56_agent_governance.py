@@ -76,7 +76,7 @@ class Feature56DiscoveryTests(unittest.TestCase):
                     "spec": {
                         "agentFramework": "google-adk",
                         "serviceAccount": "agent@p.iam.gserviceaccount.com",
-                        "deploymentSource": {"package": {}},
+                        "packageSpec": {"version": "candidate"},
                     },
                 },
                 {
@@ -132,14 +132,14 @@ class Feature56AssessmentTests(unittest.TestCase):
         return_value=[
             {
                 "id": "AGENT-001",
-                "version": "1.0",
+                "version": "2.7",
                 "status": "active",
                 "applies_to": {"project_types": ["agentic_ai"]},
                 "mandatory_controls": ["tool_allowlist"],
             }
         ],
     )
-    def test_complete_profile_can_be_governed(self, _catalog) -> None:
+    def test_complete_profile_can_be_governed_and_preserves_catalog_version(self, _catalog) -> None:
         repository = _FakeGovernanceRepository(self._complete_profile())
         service = AgentGovernanceService(repository=repository)  # type: ignore[arg-type]
 
@@ -148,21 +148,21 @@ class Feature56AssessmentTests(unittest.TestCase):
         self.assertEqual(result["assessment"]["status"], "governed")
         self.assertEqual(result["assessment"]["score"], 100)
         self.assertEqual(result["findings"], [])
-        self.assertEqual(repository.profile["applicable_policies"], ["AGENT-001@1.0"])
+        self.assertEqual(repository.profile["applicable_policies"], ["AGENT-001@2.7"])
 
     @patch(
         "atlas_datagob.services.agent_governance_service.load_policy_catalog",
         return_value=[
             {
                 "id": "AGENT-001",
-                "version": "1.0",
+                "version": "2.7",
                 "status": "active",
                 "applies_to": {"project_types": ["agentic_ai"]},
                 "mandatory_controls": ["tool_allowlist"],
             }
         ],
     )
-    def test_incomplete_profile_generates_findings(self, _catalog) -> None:
+    def test_incomplete_profile_generates_versioned_findings(self, _catalog) -> None:
         repository = _FakeGovernanceRepository({"governance_status": "not_assessed"}, with_binding=False)
         service = AgentGovernanceService(repository=repository)  # type: ignore[arg-type]
 
@@ -172,6 +172,9 @@ class Feature56AssessmentTests(unittest.TestCase):
         self.assertLess(result["assessment"]["score"], 100)
         self.assertGreater(len(result["findings"]), 0)
         self.assertTrue(any(item["check_key"] == "deployment_evidence_available" for item in result["findings"]))
+        agent_findings = [item for item in result["findings"] if item["policy_id"] == "AGENT-001"]
+        self.assertTrue(agent_findings)
+        self.assertTrue(all(item["policy_version"] == "2.7" for item in agent_findings))
 
 
 class Feature56AuthorizationTests(unittest.TestCase):
