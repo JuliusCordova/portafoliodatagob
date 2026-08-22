@@ -156,7 +156,13 @@ class FirestoreAgentGovernanceRepository:
             agent_id = agent.get("agent_id")
             if agent_id in profiles:
                 agent["governance_profile"] = profiles[agent_id]
-            agent["deployments"] = self.list_bindings(agent_id=agent_id)
+            bindings = self.list_bindings(agent_id=agent_id)
+            agent["bindings"] = bindings
+            agent["deployments"] = [
+                deployment
+                for binding in bindings
+                if (deployment := self.get_deployment(str(binding.get("deployment_id")))) is not None
+            ]
         return sorted(records, key=lambda item: item.get("created_at") or "", reverse=True)
 
     def get_agent(self, agent_id: str) -> dict | None:
@@ -294,10 +300,30 @@ class FirestoreAgentGovernanceRepository:
         return binding
 
     def replace_findings(self, agent_id: str, findings: list[dict]) -> None:
+        """Archive open findings and append the current assessment findings.
+
+        The method keeps its historical name for service compatibility, but its
+        semantics are intentionally append-preserving: governance evidence must
+        never disappear just because a later assessment was executed.
+        """
+
         collection = self._collection(self.findings_collection)
-        existing = [item for item in self.list_findings(agent_id=agent_id) if item.get("_document_id")]
-        for item in existing:
-            collection.document(str(item["_document_id"])).delete()
+        now = utc_now()
+        for item in self.list_findings(agent_id=agent_id):
+            if item.get("status") != "open":
+                continue
+            document_id = item.get("_document_id") or item.get("finding_id")
+            if not document_id:
+                continue
+            archived = {
+                **item,
+                "status": "closed",
+                "resolved_at": now,
+                "resolution": "superseded_by_reassessment",
+            }
+            archived.pop("_document_id", None)
+            collection.document(str(document_id)).set(archived)
+
         for finding in findings:
             collection.document(str(finding["finding_id"])).set(finding)
 
