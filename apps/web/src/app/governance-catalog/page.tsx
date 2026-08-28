@@ -65,6 +65,7 @@ type EditorState = {
   projectTypes: string;
   detailOne: string;
   detailTwo: string;
+  principle: string;
   changeNote: string;
 };
 
@@ -122,6 +123,7 @@ function makeEditor(kind: CatalogKind): EditorState {
     projectTypes: "",
     detailOne: "",
     detailTwo: "",
+    principle: "",
     changeNote: ""
   };
 }
@@ -142,6 +144,7 @@ function recordToEditor(kind: CatalogKind, record: GovernanceRecord): EditorStat
       kind === "policies" ? record.mandatory_controls : record.required_components
     ),
     detailTwo: kind === "policies" ? record.recommendation ?? "" : listToText(record.gcp_services),
+    principle: kind === "architecture_patterns" ? record.principle ?? "" : "",
     changeNote: ""
   };
 }
@@ -252,7 +255,7 @@ export default function GovernanceCatalogPage() {
       project_types: textToList(state.projectTypes),
       required_components: textToList(state.detailOne),
       gcp_services: textToList(state.detailTwo),
-      principle: state.name.trim()
+      principle: state.principle.trim()
     };
   }
 
@@ -262,8 +265,8 @@ export default function GovernanceCatalogPage() {
       setFeedback({ tone: "error", message: "Completa ID, versión, nombre y motivo del cambio." });
       return;
     }
-    if (editor.kind === "architecture_patterns" && !editor.detailTwo.trim()) {
-      setFeedback({ tone: "error", message: "Agrega al menos un servicio GCP." });
+    if (editor.kind === "architecture_patterns" && (!editor.detailTwo.trim() || !editor.principle.trim())) {
+      setFeedback({ tone: "error", message: "Agrega servicios GCP y el principio arquitectónico." });
       return;
     }
 
@@ -427,6 +430,7 @@ export default function GovernanceCatalogPage() {
                 <label className={styles.span2}>Tipos de proyecto<input value={editor.projectTypes} onChange={(e) => setEditor({ ...editor, projectTypes: e.target.value })} placeholder="machine_learning, generative_ai" /></label>
                 <label className={styles.span2}>{editor.kind === "policies" ? "Controles obligatorios" : "Componentes requeridos"}<textarea value={editor.detailOne} onChange={(e) => setEditor({ ...editor, detailOne: e.target.value })} placeholder="Separados por coma" /></label>
                 <label className={styles.span2}>{editor.kind === "policies" ? "Recomendación" : "Servicios GCP"}<textarea value={editor.detailTwo} onChange={(e) => setEditor({ ...editor, detailTwo: e.target.value })} placeholder={editor.kind === "policies" ? "Qué debe cumplir la iniciativa" : "Cloud Storage, BigQuery, Vertex AI"} /></label>
+                {editor.kind === "architecture_patterns" ? <label className={styles.span2}>Principio arquitectónico<textarea value={editor.principle} onChange={(e) => setEditor({ ...editor, principle: e.target.value })} placeholder="Principio que debe cumplir este patrón" /></label> : null}
                 <label className={styles.span2}>Motivo del cambio<textarea value={editor.changeNote} onChange={(e) => setEditor({ ...editor, changeNote: e.target.value })} placeholder="Obligatorio para auditoría" /></label>
               </div>
               <div className={styles.editorActions}>
