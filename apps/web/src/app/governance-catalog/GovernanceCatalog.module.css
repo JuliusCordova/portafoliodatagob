@@ -20,7 +20,8 @@
 
 .hero h1,
 .toolbar h2,
-.editor h3 {
+.editor h3,
+.detailPanel h3 {
   margin: 4px 0 8px;
 }
 
@@ -69,6 +70,8 @@
 .tableCard,
 .auditCard,
 .editor,
+.detailPanel,
+.lifecycleGuide,
 .feedback {
   max-width: 1480px;
   margin-left: auto;
@@ -144,6 +147,33 @@
   color: #77707f;
 }
 
+.lifecycleGuide {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.lifecycleGuide > div {
+  padding: 14px 16px;
+  border: 1px solid #ded7e8;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fff 0%, #fbf9fe 100%);
+}
+
+.lifecycleGuide strong {
+  display: block;
+  margin-bottom: 5px;
+  color: #362848;
+  font-size: 0.84rem;
+}
+
+.lifecycleGuide span {
+  color: #716879;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
 .primaryButton,
 .ghostButton,
 .rowActions button,
@@ -175,7 +205,8 @@
   color: #322b3a;
 }
 
-.editor {
+.editor,
+.detailPanel {
   padding: 22px;
   margin-bottom: 16px;
   border: 1px solid #ddcff0;
@@ -184,13 +215,97 @@
   box-shadow: 0 12px 30px rgba(48, 36, 74, 0.07);
 }
 
+.detailPanel {
+  border-color: #d8deeb;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
+}
+
 .editorHeader,
 .editorActions,
-.auditHead {
+.auditHead,
+.detailHeader,
+.detailHeaderActions,
+.detailActions {
   display: flex;
   justify-content: space-between;
   gap: 14px;
   align-items: center;
+}
+
+.detailHeaderActions {
+  justify-content: flex-end;
+}
+
+.detailGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.detailItem {
+  padding: 13px 14px;
+  border: 1px solid #ece8f0;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.detailItem > span {
+  display: block;
+  margin-bottom: 6px;
+  color: #77707f;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.detailItem strong,
+.detailItem small {
+  display: block;
+}
+
+.detailItem small {
+  margin-top: 4px;
+  color: #8a828f;
+}
+
+.detailItem p {
+  margin: 0;
+  color: #51485b;
+  line-height: 1.6;
+}
+
+.detailWide {
+  grid-column: span 4;
+}
+
+.chipList {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.chip {
+  display: inline-flex;
+  padding: 6px 9px;
+  border-radius: 999px;
+  background: #f3eff9;
+  border: 1px solid #e3d9ef;
+  color: #563984;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.detailActions {
+  justify-content: flex-start;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #ece8f0;
+}
+
+.detailActions small {
+  color: #77707f;
 }
 
 .formGrid {
@@ -222,7 +337,7 @@
 }
 
 .formGrid textarea {
-  min-height: 82px;
+  min-height: 92px;
   resize: vertical;
 }
 
@@ -235,6 +350,59 @@
 .formGrid input:disabled {
   background: #f0edf3;
   color: #827a88;
+}
+
+.fieldHelp {
+  color: #807789;
+  font-size: 0.73rem;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.projectTypeGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.projectTypeOption {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 11px;
+  border: 1px solid #ded8e5;
+  border-radius: 11px;
+  background: #fbfafc;
+  cursor: pointer;
+}
+
+.projectTypeOption input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: #6534a7;
+}
+
+.projectTypeOption > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.projectTypeOption strong {
+  font-size: 0.76rem;
+  color: #392e42;
+}
+
+.projectTypeOption small {
+  color: #8a828f;
+  font-size: 0.68rem;
+  font-weight: 500;
+}
+
+.projectTypeSelected {
+  border-color: #9d7bc2;
+  background: #f5effc;
 }
 
 .span2 {
@@ -451,6 +619,13 @@
   margin-bottom: 24px;
 }
 
+@media (max-width: 1100px) {
+  .projectTypeGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .detailGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .detailWide { grid-column: span 2; }
+  .lifecycleGuide { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 900px) {
   .page { padding: 14px; }
   .hero { flex-direction: column; padding: 22px; }
@@ -462,4 +637,8 @@
   .auditList { grid-template-columns: 1fr; }
   .tabs { width: 100%; overflow-x: auto; }
   .tab, .tabActive { white-space: nowrap; }
+  .projectTypeGrid { grid-template-columns: 1fr; }
+  .detailGrid { grid-template-columns: 1fr; }
+  .detailWide { grid-column: span 1; }
+  .detailHeader, .detailHeaderActions, .detailActions { align-items: flex-start; flex-direction: column; }
 }
