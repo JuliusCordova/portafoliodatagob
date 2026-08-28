@@ -71,6 +71,16 @@ type EditorState = {
 
 type Feedback = { tone: "success" | "error" | "info"; message: string } | null;
 
+const PROJECT_TYPE_OPTIONS = [
+  { value: "data_engineering", label: "Data Engineering" },
+  { value: "dashboard_analytics", label: "Analytics / Dashboard" },
+  { value: "machine_learning", label: "Machine Learning" },
+  { value: "generative_ai", label: "IA Generativa" },
+  { value: "agentic_ai", label: "IA Agéntica" },
+  { value: "data_governance", label: "Gobierno de Datos" },
+  { value: "hybrid", label: "Híbrido" }
+] as const;
+
 function listToText(values?: string[]) {
   return (values ?? []).join(", ");
 }
@@ -79,11 +89,18 @@ function textToList(value: string) {
   return Array.from(
     new Set(
       value
-        .split(",")
+        .split(/[,\n]+/)
         .map((item) => item.trim())
         .filter(Boolean)
     )
   );
+}
+
+function toggleListValue(current: string, value: string) {
+  const next = new Set(textToList(current));
+  if (next.has(value)) next.delete(value);
+  else next.add(value);
+  return Array.from(next).join(", ");
 }
 
 function statusLabel(status: GovernanceRecord["status"]) {
@@ -157,6 +174,7 @@ export default function GovernanceCatalogPage() {
   const [audit, setAudit] = useState<AuditResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [editor, setEditor] = useState<EditorState | null>(null);
+  const [viewer, setViewer] = useState<GovernanceRecord | null>(null);
   const [feedback, setFeedback] = useState<Feedback>(null);
 
   const isCommittee = useMemo(
@@ -224,6 +242,7 @@ export default function GovernanceCatalogPage() {
       if (!response.ok) throw new Error(text || `HTTP ${response.status}`);
       setFeedback({ tone: "success", message: successMessage });
       setEditor(null);
+      setViewer(null);
       await loadTab(tab);
     } catch (error) {
       setFeedback({
@@ -263,6 +282,21 @@ export default function GovernanceCatalogPage() {
     if (!editor) return;
     if (!editor.id.trim() || !editor.version.trim() || !editor.name.trim() || !editor.changeNote.trim()) {
       setFeedback({ tone: "error", message: "Completa ID, versión, nombre y motivo del cambio." });
+      return;
+    }
+    if (!textToList(editor.projectTypes).length) {
+      setFeedback({ tone: "error", message: "Selecciona al menos un tipo de proyecto." });
+      return;
+    }
+    if (!textToList(editor.detailOne).length) {
+      setFeedback({
+        tone: "error",
+        message: editor.kind === "policies" ? "Agrega al menos un control obligatorio." : "Agrega al menos un componente requerido."
+      });
+      return;
+    }
+    if (editor.kind === "policies" && !editor.detailTwo.trim()) {
+      setFeedback({ tone: "error", message: "Agrega la recomendación de cumplimiento de la política." });
       return;
     }
     if (editor.kind === "architecture_patterns" && (!editor.detailTwo.trim() || !editor.principle.trim())) {
@@ -320,7 +354,8 @@ export default function GovernanceCatalogPage() {
   }
 
   async function cloneRecord(record: GovernanceRecord) {
-    const newVersion = window.prompt(`Nueva versión para ${record.id}:`, "1.1")?.trim();
+    const defaultVersion = record.version === "1.0" ? "1.1" : "";
+    const newVersion = window.prompt(`Nueva versión para ${record.id}:`, defaultVersion)?.trim();
     if (!newVersion) return;
     const note = window.prompt("Motivo de creación de la nueva versión (obligatorio):")?.trim();
     if (!note) return;
@@ -333,8 +368,19 @@ export default function GovernanceCatalogPage() {
         new_version: newVersion,
         change_note: note
       },
-      `Se creó ${record.id}@${newVersion} como borrador.`
+      `Se creó ${record.id}@${newVersion} como borrador. Usa “Editar borrador” en esa fila para modificarla antes de activarla.`
     );
+  }
+
+  function switchTab(nextTab: Tab) {
+    setTab(nextTab);
+    setEditor(null);
+    setViewer(null);
+  }
+
+  function openViewer(record: GovernanceRecord) {
+    setEditor(null);
+    setViewer(record);
   }
 
   if (!sessionLoaded) {
@@ -361,6 +407,16 @@ export default function GovernanceCatalogPage() {
   const activeCount = records.filter((item) => item.status === "active").length;
   const draftCount = records.filter((item) => item.status === "draft").length;
   const retiredCount = records.filter((item) => item.status === "retired").length;
+  const viewerProjectTypes = viewer
+    ? tab === "policies"
+      ? viewer.applies_to?.project_types ?? []
+      : viewer.project_types ?? []
+    : [];
+  const viewerDetailItems = viewer
+    ? tab === "policies"
+      ? viewer.mandatory_controls ?? []
+      : viewer.required_components ?? []
+    : [];
 
   return (
     <main className={styles.page}>
@@ -382,13 +438,13 @@ export default function GovernanceCatalogPage() {
       </section>
 
       <section className={styles.tabs} aria-label="Catálogo de gobierno">
-        <button className={tab === "policies" ? styles.tabActive : styles.tab} onClick={() => { setTab("policies"); setEditor(null); }}>
+        <button className={tab === "policies" ? styles.tabActive : styles.tab} onClick={() => switchTab("policies")}>
           Políticas
         </button>
-        <button className={tab === "architecture_patterns" ? styles.tabActive : styles.tab} onClick={() => { setTab("architecture_patterns"); setEditor(null); }}>
+        <button className={tab === "architecture_patterns" ? styles.tabActive : styles.tab} onClick={() => switchTab("architecture_patterns")}>
           Patrones de arquitectura
         </button>
-        <button className={tab === "audit" ? styles.tabActive : styles.tab} onClick={() => { setTab("audit"); setEditor(null); }}>
+        <button className={tab === "audit" ? styles.tabActive : styles.tab} onClick={() => switchTab("audit")}>
           Historial / Auditoría
         </button>
       </section>
@@ -409,10 +465,87 @@ export default function GovernanceCatalogPage() {
               <h2>{tab === "policies" ? "Políticas gobernadas" : "Patrones de arquitectura aprobados"}</h2>
               <p>Draft → Active → Retired. Las versiones históricas nunca se borran.</p>
             </div>
-            <button className={styles.primaryButton} onClick={() => setEditor(makeEditor(tab))}>
+            <button
+              className={styles.primaryButton}
+              onClick={() => {
+                setViewer(null);
+                setEditor(makeEditor(tab));
+              }}
+            >
               + {tab === "policies" ? "Nueva política" : "Nuevo patrón"}
             </button>
           </section>
+
+          <section className={styles.lifecycleGuide}>
+            <div>
+              <strong>¿Solo quieres leer?</strong>
+              <span>Usa “Ver detalle”. No genera cambios ni eventos de auditoría.</span>
+            </div>
+            <div>
+              <strong>¿Quieres modificar una versión activa?</strong>
+              <span>Usa “Crear versión para editar”. La versión vigente queda intacta mientras trabajas en un Draft.</span>
+            </div>
+            <div>
+              <strong>¿Cuándo cambia el agente?</strong>
+              <span>Solo al activar una nueva versión. Guardar o editar un Draft no modifica el Intake.</span>
+            </div>
+          </section>
+
+          {viewer ? (
+            <section className={styles.detailPanel}>
+              <div className={styles.detailHeader}>
+                <div>
+                  <span className={styles.eyebrow}>Lectura · Sin modificación</span>
+                  <h3>{viewer.id}@{viewer.version} · {viewer.name}</h3>
+                </div>
+                <div className={styles.detailHeaderActions}>
+                  <span className={`${styles.status} ${styles[`status_${viewer.status}`]}`}>{statusLabel(viewer.status)}</span>
+                  <button className={styles.ghostButton} onClick={() => setViewer(null)}>Cerrar</button>
+                </div>
+              </div>
+              <div className={styles.detailGrid}>
+                <div className={styles.detailItem}><span>ID</span><strong>{viewer.id}</strong></div>
+                <div className={styles.detailItem}><span>Versión</span><strong>{viewer.version}</strong></div>
+                <div className={styles.detailItem}><span>Estado</span><strong>{statusLabel(viewer.status)}</strong></div>
+                <div className={styles.detailItem}><span>Última actualización</span><strong>{formatDate(viewer.updated_at)}</strong><small>{viewer.updated_by ?? "—"}</small></div>
+                <div className={`${styles.detailItem} ${styles.detailWide}`}>
+                  <span>Aplica a</span>
+                  <div className={styles.chipList}>{viewerProjectTypes.map((item) => <span className={styles.chip} key={item}>{item}</span>)}</div>
+                </div>
+                <div className={`${styles.detailItem} ${styles.detailWide}`}>
+                  <span>{tab === "policies" ? "Controles obligatorios" : "Componentes requeridos"}</span>
+                  <div className={styles.chipList}>{viewerDetailItems.map((item) => <span className={styles.chip} key={item}>{item}</span>)}</div>
+                </div>
+                {tab === "policies" ? (
+                  <div className={`${styles.detailItem} ${styles.detailWide}`}><span>Recomendación</span><p>{viewer.recommendation || "—"}</p></div>
+                ) : (
+                  <>
+                    <div className={`${styles.detailItem} ${styles.detailWide}`}>
+                      <span>Servicios GCP</span>
+                      <div className={styles.chipList}>{(viewer.gcp_services ?? []).map((item) => <span className={styles.chip} key={item}>{item}</span>)}</div>
+                    </div>
+                    <div className={`${styles.detailItem} ${styles.detailWide}`}><span>Principio arquitectónico</span><p>{viewer.principle || "—"}</p></div>
+                  </>
+                )}
+              </div>
+              {viewer.status !== "draft" ? (
+                <div className={styles.detailActions}>
+                  <button className={styles.primaryButton} onClick={() => void cloneRecord(viewer)}>Crear versión para editar</button>
+                  <small>La versión actual no se altera; se crea un nuevo Draft.</small>
+                </div>
+              ) : (
+                <div className={styles.detailActions}>
+                  <button
+                    className={styles.primaryButton}
+                    onClick={() => {
+                      setViewer(null);
+                      setEditor(recordToEditor(tab, viewer));
+                    }}
+                  >Editar borrador</button>
+                </div>
+              )}
+            </section>
+          ) : null}
 
           {editor ? (
             <section className={styles.editor}>
@@ -424,18 +557,74 @@ export default function GovernanceCatalogPage() {
                 <button className={styles.ghostButton} onClick={() => setEditor(null)}>Cerrar</button>
               </div>
               <div className={styles.formGrid}>
-                <label>ID<input value={editor.id} disabled={editor.mode === "edit"} onChange={(e) => setEditor({ ...editor, id: e.target.value })} placeholder={editor.kind === "policies" ? "ML-002" : "GCP-STREAMING-001"} /></label>
-                <label>Versión<input value={editor.version} disabled={editor.mode === "edit"} onChange={(e) => setEditor({ ...editor, version: e.target.value })} placeholder="1.0" /></label>
-                <label className={styles.span2}>Nombre<input value={editor.name} onChange={(e) => setEditor({ ...editor, name: e.target.value })} placeholder="Nombre ejecutivo y claro" /></label>
-                <label className={styles.span2}>Tipos de proyecto<input value={editor.projectTypes} onChange={(e) => setEditor({ ...editor, projectTypes: e.target.value })} placeholder="machine_learning, generative_ai" /></label>
-                <label className={styles.span2}>{editor.kind === "policies" ? "Controles obligatorios" : "Componentes requeridos"}<textarea value={editor.detailOne} onChange={(e) => setEditor({ ...editor, detailOne: e.target.value })} placeholder="Separados por coma" /></label>
-                <label className={styles.span2}>{editor.kind === "policies" ? "Recomendación" : "Servicios GCP"}<textarea value={editor.detailTwo} onChange={(e) => setEditor({ ...editor, detailTwo: e.target.value })} placeholder={editor.kind === "policies" ? "Qué debe cumplir la iniciativa" : "Cloud Storage, BigQuery, Vertex AI"} /></label>
-                {editor.kind === "architecture_patterns" ? <label className={styles.span2}>Principio arquitectónico<textarea value={editor.principle} onChange={(e) => setEditor({ ...editor, principle: e.target.value })} placeholder="Principio que debe cumplir este patrón" /></label> : null}
-                <label className={styles.span2}>Motivo del cambio<textarea value={editor.changeNote} onChange={(e) => setEditor({ ...editor, changeNote: e.target.value })} placeholder="Obligatorio para auditoría" /></label>
+                <label>
+                  ID
+                  <input value={editor.id} disabled={editor.mode === "edit"} onChange={(e) => setEditor({ ...editor, id: e.target.value })} placeholder={editor.kind === "policies" ? "ML-002" : "GCP-STREAMING-001"} />
+                  <small className={styles.fieldHelp}>{editor.kind === "policies" ? "Identificador estable. Prefijos sugeridos: DATA, SEC, ML, GENAI, AGENT o FINOPS." : "Identificador estable del patrón. Ejemplo: GCP-ML-002."}</small>
+                </label>
+                <label>
+                  Versión
+                  <input value={editor.version} disabled={editor.mode === "edit"} onChange={(e) => setEditor({ ...editor, version: e.target.value })} placeholder="1.0" />
+                  <small className={styles.fieldHelp}>Nueva definición: 1.0. Para cambiar una activa, crea una nueva versión como 1.1 o 1.2.</small>
+                </label>
+                <label className={styles.span2}>
+                  Nombre
+                  <input value={editor.name} onChange={(e) => setEditor({ ...editor, name: e.target.value })} placeholder={editor.kind === "policies" ? "Ej. Preparación de modelos ML para producción" : "Ej. Ciclo gobernado de Machine Learning"} />
+                  <small className={styles.fieldHelp}>Nombre legible para el Comité y para las respuestas del agente; evita códigos internos en este campo.</small>
+                </label>
+                <label className={styles.span2}>
+                  Tipos de proyecto
+                  <div className={styles.projectTypeGrid}>
+                    {PROJECT_TYPE_OPTIONS.map((option) => {
+                      const checked = textToList(editor.projectTypes).includes(option.value);
+                      return (
+                        <span className={`${styles.projectTypeOption} ${checked ? styles.projectTypeSelected : ""}`} key={option.value}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => setEditor({ ...editor, projectTypes: toggleListValue(editor.projectTypes, option.value) })}
+                          />
+                          <span><strong>{option.label}</strong><small>{option.value}</small></span>
+                        </span>
+                      );
+                    })}
+                  </div>
+                  <small className={styles.fieldHelp}>Selecciona en qué iniciativas debe aplicarse automáticamente esta definición. Estos son los valores canónicos que usa ATLAS.</small>
+                </label>
+                <label className={styles.span2}>
+                  {editor.kind === "policies" ? "Controles obligatorios" : "Componentes requeridos"}
+                  <textarea
+                    value={editor.detailOne}
+                    onChange={(e) => setEditor({ ...editor, detailOne: e.target.value })}
+                    placeholder={editor.kind === "policies" ? "training_data_version\nevaluation_metrics\nmodel_registry\ndrift_monitoring" : "sources\nbronze\nsilver\ngold\nmodel_monitoring"}
+                  />
+                  <small className={styles.fieldHelp}>{editor.kind === "policies" ? "Usa identificadores técnicos estables en minúsculas, preferentemente snake_case. Puedes escribir uno por línea o separados por coma." : "Componentes lógicos obligatorios del patrón. Uno por línea o separados por coma."}</small>
+                </label>
+                <label className={styles.span2}>
+                  {editor.kind === "policies" ? "Recomendación" : "Servicios GCP"}
+                  <textarea
+                    value={editor.detailTwo}
+                    onChange={(e) => setEditor({ ...editor, detailTwo: e.target.value })}
+                    placeholder={editor.kind === "policies" ? "Ej. Antes de producción, el modelo debe contar con datos de entrenamiento versionados, métricas acordadas, registro del modelo y monitoreo de drift." : "Cloud Storage\nBigQuery\nVertex AI\nCloud Monitoring"}
+                  />
+                  <small className={styles.fieldHelp}>{editor.kind === "policies" ? "Explica en lenguaje natural qué debe cumplir la iniciativa. Esta descripción puede ser utilizada por el agente al explicar la política." : "Servicios aprobados o esperados para implementar el patrón. Uno por línea o separados por coma."}</small>
+                </label>
+                {editor.kind === "architecture_patterns" ? (
+                  <label className={styles.span2}>
+                    Principio arquitectónico
+                    <textarea value={editor.principle} onChange={(e) => setEditor({ ...editor, principle: e.target.value })} placeholder="Ej. Las soluciones ML heredan capas de datos gobernadas y agregan registro, evaluación, serving seguro y monitoreo." />
+                    <small className={styles.fieldHelp}>Regla conceptual que la arquitectura debe respetar, independiente de una implementación puntual.</small>
+                  </label>
+                ) : null}
+                <label className={styles.span2}>
+                  Motivo del cambio
+                  <textarea value={editor.changeNote} onChange={(e) => setEditor({ ...editor, changeNote: e.target.value })} placeholder="Ej. Se incorpora monitoreo de drift como requisito obligatorio para modelos productivos." />
+                  <small className={styles.fieldHelp}>Obligatorio para auditoría. Describe por qué el Comité crea o modifica esta versión; no forma parte del contenido de la política.</small>
+                </label>
               </div>
               <div className={styles.editorActions}>
                 <button className={styles.primaryButton} disabled={loading} onClick={() => void saveEditor()}>{loading ? "Guardando…" : "Guardar borrador"}</button>
-                <small>Guardar un borrador no cambia el comportamiento del Intake.</small>
+                <small>Guardar un borrador no cambia el comportamiento del Intake. El agente solo consume versiones activas.</small>
               </div>
             </section>
           ) : null}
@@ -458,10 +647,11 @@ export default function GovernanceCatalogPage() {
                       <td><span>{formatDate(record.updated_at)}</span><small>{record.updated_by ?? "—"}</small></td>
                       <td>
                         <div className={styles.rowActions}>
-                          {record.status === "draft" ? <button onClick={() => setEditor(recordToEditor(tab, record))}>Editar</button> : null}
+                          <button onClick={() => openViewer(record)}>Ver detalle</button>
+                          {record.status === "draft" ? <button onClick={() => { setViewer(null); setEditor(recordToEditor(tab, record)); }}>Editar borrador</button> : null}
                           {record.status === "draft" ? <button onClick={() => void runRowAction("activate", record)}>Activar</button> : null}
                           {record.status === "draft" ? <button className={styles.dangerAction} onClick={() => void runRowAction("delete", record)}>Eliminar draft</button> : null}
-                          {record.status !== "draft" ? <button onClick={() => void cloneRecord(record)}>Nueva versión</button> : null}
+                          {record.status !== "draft" ? <button onClick={() => void cloneRecord(record)}>Crear versión para editar</button> : null}
                           {record.status === "active" ? <button className={styles.dangerAction} onClick={() => void runRowAction("retire", record)}>Retirar</button> : null}
                         </div>
                       </td>
