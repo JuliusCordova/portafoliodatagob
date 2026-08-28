@@ -24,6 +24,7 @@ class GovernanceCompletionGuardTest(unittest.TestCase):
             "status": "approved_baseline_selected",
             "pattern_id": "GCP-BI-001",
             "pattern_version": "1.1",
+            "project_type": "dashboard_analytics",
         }
 
         def fake_validate(*, project_type, proposed_architecture, tool_context):
@@ -33,7 +34,7 @@ class GovernanceCompletionGuardTest(unittest.TestCase):
             return expected
 
         with patch(
-            "atlas_datagob.services.governance_completion_guard.validate_gcp_architecture",
+            "atlas_datagob.services.governance_completion_guard.validate_gcp_architecture_governed",
             side_effect=fake_validate,
         ):
             delta, activities = complete_required_governance_assessments(state)
@@ -51,7 +52,7 @@ class GovernanceCompletionGuardTest(unittest.TestCase):
         }
 
         with patch(
-            "atlas_datagob.services.governance_completion_guard.evaluate_governance_policies"
+            "atlas_datagob.services.governance_completion_guard.evaluate_governance_policies_governed"
         ) as evaluate:
             delta, activities = complete_required_governance_assessments(state)
 
@@ -84,7 +85,7 @@ class GovernanceCompletionGuardTest(unittest.TestCase):
             return expected
 
         with patch(
-            "atlas_datagob.services.governance_completion_guard.evaluate_governance_policies",
+            "atlas_datagob.services.governance_completion_guard.evaluate_governance_policies_governed",
             side_effect=fake_evaluate,
         ):
             delta, activities = complete_required_governance_assessments(state)
