@@ -10,11 +10,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from atlas_datagob.api.governance_admin_app import app
-from atlas_datagob.services.authz import (
-    AUTH_MODE_HEADER,
-    AuthorizationError,
-    authorize_request,
-)
+from atlas_datagob.services.authz import AUTH_MODE_HEADER, AuthorizationError, authorize_request
 from atlas_datagob.services.governance_catalog_admin import (
     GovernanceCatalogAdminError,
     activate_version,
@@ -48,20 +44,29 @@ NEW_POLICY = {
     "recommendation": "Material AI decisions require defined human oversight.",
 }
 
+ARCHITECTURE_DRAFT = {
+    "id": "GCP-STREAMING-001",
+    "version": "1.0",
+    "status": "draft",
+    "name": "Governed Streaming Lifecycle",
+    "project_types": ["data_engineering"],
+    "required_components": ["sources", "streaming_ingestion", "silver", "monitoring"],
+    "gcp_services": ["Pub/Sub", "Dataflow", "BigQuery", "Cloud Monitoring"],
+    "principle": "Streaming data must preserve governance, observability and controlled serving.",
+}
 
-class Feature58GovernanceCatalogStoreTest(unittest.TestCase):
+
+class LocalCatalogFixture(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
         self.root = Path(self.temp_dir.name)
-        policy_dir = self.root / "policies"
-        architecture_dir = self.root / "architecture_patterns"
-        policy_dir.mkdir(parents=True)
-        architecture_dir.mkdir(parents=True)
-        (policy_dir / "catalog.json").write_text(
+        (self.root / "policies").mkdir(parents=True)
+        (self.root / "architecture_patterns").mkdir(parents=True)
+        (self.root / "policies" / "catalog.json").write_text(
             json.dumps([ACTIVE_POLICY], indent=2) + "\n",
             encoding="utf-8",
         )
-        (architecture_dir / "catalog.json").write_text("[]\n", encoding="utf-8")
+        (self.root / "architecture_patterns" / "catalog.json").write_text("[]\n", encoding="utf-8")
         self.env = patch.dict(
             os.environ,
             {
@@ -76,6 +81,8 @@ class Feature58GovernanceCatalogStoreTest(unittest.TestCase):
         self.env.stop()
         self.temp_dir.cleanup()
 
+
+class Feature58GovernanceCatalogStoreTest(LocalCatalogFixture):
     def test_create_update_activate_retire_preserves_versions_and_audit(self) -> None:
         created = create_draft(
             "policies",
@@ -120,7 +127,11 @@ class Feature58GovernanceCatalogStoreTest(unittest.TestCase):
 
         audit = list_audit_events()
         self.assertEqual(4, audit["count"])
-        self.assertEqual("version_retired", audit["events"][0]["action"])
+        self.assertEqual(
+            {"draft_created", "draft_updated", "version_activated", "version_retired"},
+            {event["action"] for event in audit["events"]},
+        )
+        self.assertTrue(all(event["actor"] == "committee@example.com" for event in audit["events"]))
 
     def test_activation_retires_previous_active_version_for_same_id(self) -> None:
         clone_version(
@@ -169,6 +180,19 @@ class Feature58GovernanceCatalogStoreTest(unittest.TestCase):
         ids = {item["id"] for item in list_catalog_versions("policies")["records"]}
         self.assertNotIn("AI-002", ids)
 
+    def test_architecture_pattern_preserves_components_services_and_principle(self) -> None:
+        created = create_draft(
+            "architecture_patterns",
+            ARCHITECTURE_DRAFT,
+            actor="committee@example.com",
+            change_note="Add governed streaming architecture",
+        )
+        record = created["record"]
+        self.assertEqual("draft", record["status"])
+        self.assertIn("Dataflow", record["gcp_services"])
+        self.assertIn("streaming_ingestion", record["required_components"])
+        self.assertTrue(record["principle"].startswith("Streaming data"))
+
 
 class Feature58AuthorizationTest(unittest.TestCase):
     def test_direct_policy_catalog_is_committee_only(self) -> None:
@@ -194,17 +218,10 @@ class Feature58AuthorizationTest(unittest.TestCase):
 
 
 @unittest.skipIf(app is None, "FastAPI not installed")
-class Feature58GovernanceAdminApiTest(unittest.TestCase):
+class Feature58GovernanceAdminApiTest(LocalCatalogFixture):
     def setUp(self) -> None:
-        self.temp_dir = tempfile.TemporaryDirectory()
-        self.root = Path(self.temp_dir.name)
-        (self.root / "policies").mkdir(parents=True)
-        (self.root / "architecture_patterns").mkdir(parents=True)
-        (self.root / "policies" / "catalog.json").write_text(
-            json.dumps([ACTIVE_POLICY], indent=2) + "\n",
-            encoding="utf-8",
-        )
-        (self.root / "architecture_patterns" / "catalog.json").write_text("[]\n", encoding="utf-8")
+        super().setUp()
+        self.env.stop()
         self.env = patch.dict(
             os.environ,
             {
@@ -220,10 +237,6 @@ class Feature58GovernanceAdminApiTest(unittest.TestCase):
             "X-ATLAS-USER": "committee@example.com",
             "X-ATLAS-ROLES": "committee_member",
         }
-
-    def tearDown(self) -> None:
-        self.env.stop()
-        self.temp_dir.cleanup()
 
     def test_health_is_public(self) -> None:
         response = self.client.get("/health")
