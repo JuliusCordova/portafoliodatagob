@@ -49,7 +49,7 @@ paths:
     post:
       summary: Run one guided Gemini ADK business-intake conversation turn.
       description: >
-        Starts or resumes an in-memory ADK intake session. The conversation may
+        Starts or resumes a durable ADK intake session. The conversation may
         invoke Data Readiness, Architecture Validation and Policy & Controls
         specialist agents. This endpoint never creates a formal demand.
       requestBody:
@@ -73,6 +73,36 @@ paths:
       responses:
         "200":
           description: Catalog source, bucket/prefix and active record counts.
+  /intake/business-case/document:
+    post:
+      summary: Download a ready canonical Business Case as a Microsoft Word document.
+      description: >
+        Generates a DOCX deterministically from the Canonical Business Case already
+        materialized in the ADK session. The endpoint does not invoke Gemini, register
+        a demand or mutate lifecycle state. Export is available only when Definition
+        of Ready is complete.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BusinessCaseDocumentPayload"
+      responses:
+        "200":
+          description: Office Open XML Word document generated from the canonical Business Case.
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+          content:
+            application/vnd.openxmlformats-officedocument.wordprocessingml.document:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Intake session not found.
+        "409":
+          description: Business Case does not yet meet Definition of Ready.
   /intake/business-case/register:
     post:
       summary: Register a confirmed canonical Business Case as a governed demand.
@@ -225,6 +255,13 @@ components:
           type: array
           items:
             type: string
+    BusinessCaseDocumentPayload:
+      type: object
+      required: [session_id]
+      properties:
+        session_id:
+          type: string
+          minLength: 5
     BusinessCaseRegistrationPayload:
       type: object
       required: [session_id, confirmed]
@@ -269,6 +306,14 @@ components:
           type: object
         preliminary_risk:
           type: string
+        definition_gaps:
+          type: array
+          items:
+            type: string
+        governance_requirements:
+          type: array
+          items:
+            type: string
         gaps:
           type: array
           items:

@@ -232,6 +232,8 @@ def permission_for_request(method: str, path: str) -> str | None:
         return "intake:validate"
     if path == "/intake/governance-catalog" and method == "GET":
         return "policy:read"
+    if path == "/intake/business-case/document" and method == "POST":
+        return "intake:validate"
     if path == "/intake/business-case/register" and method == "POST":
         return "demand:create"
     if path == "/demands/validate-and-create" and method == "POST":

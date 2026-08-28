@@ -66,6 +66,8 @@ type BusinessCase = {
   architecture_assessment?: ArchitectureAssessment;
   policy_assessment?: PolicyAssessment;
   preliminary_risk?: string;
+  definition_gaps?: string[];
+  governance_requirements?: string[];
   gaps?: string[];
   recommendation?: string;
   completeness?: number;
@@ -118,6 +120,14 @@ function messageId() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function filenameFromDisposition(disposition: string | null) {
+  if (!disposition) return "ATLAS_Caso_de_Negocio.docx";
+  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) return decodeURIComponent(utf8Match[1].replace(/["']/g, ""));
+  const plainMatch = disposition.match(/filename="?([^";]+)"?/i);
+  return plainMatch?.[1] || "ATLAS_Caso_de_Negocio.docx";
+}
+
 export default function ConversationalIntake() {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -138,6 +148,7 @@ export default function ConversationalIntake() {
   const [specialistActivity, setSpecialistActivity] = useState<SpecialistActivity[]>([]);
   const [catalog, setCatalog] = useState<CatalogSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [registering, setRegistering] = useState(false);
   const [error, setError] = useState("");
   const [registeredDemandId, setRegisteredDemandId] = useState<string | null>(null);
@@ -147,8 +158,8 @@ export default function ConversationalIntake() {
   const ready = Boolean(businessCase.ready_to_register);
 
   const visibleGaps = useMemo(
-    () => (businessCase.gaps ?? []).filter(Boolean).slice(0, 6),
-    [businessCase.gaps]
+    () => (businessCase.definition_gaps ?? businessCase.gaps ?? []).filter(Boolean).slice(0, 6),
+    [businessCase.definition_gaps, businessCase.gaps]
   );
 
   useEffect(() => {
@@ -214,6 +225,39 @@ export default function ConversationalIntake() {
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     await sendMessage(draft);
+  }
+
+  async function downloadBusinessCase() {
+    if (!sessionId || !ready || downloading) return;
+
+    setDownloading(true);
+    setError("");
+    try {
+      const response = await fetch("/api/intake/business-case/document", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId })
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`HTTP ${response.status}: ${text}`);
+      }
+
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = filenameFromDisposition(response.headers.get("content-disposition"));
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : "No se pudo generar el documento Word.";
+      setError(message);
+    } finally {
+      setDownloading(false);
+    }
   }
 
   async function registerBusinessCase() {
@@ -499,10 +543,19 @@ export default function ConversationalIntake() {
           <strong>{ready ? "Listo para confirmación" : "Seguimos definiendo"}</strong>
           <p>
             {ready
-              ? "El Caso de Negocio está estructurado. Tú decides cuándo convertirlo en un requerimiento formal."
-              : "ATLAS seguirá haciendo preguntas hasta completar la información necesaria para registrar el requerimiento."}
+              ? "El Caso de Negocio está estructurado. Puedes descargar el documento Word, seguir refinándolo o registrarlo como requerimiento formal."
+              : "ATLAS seguirá haciendo preguntas hasta completar la información necesaria para registrar y descargar el Caso de Negocio."}
           </p>
         </div>
+
+        <button
+          className={styles.registerButton}
+          type="button"
+          disabled={!ready || !sessionId || downloading}
+          onClick={() => void downloadBusinessCase()}
+        >
+          {downloading ? "Generando Word…" : "Descargar Caso de Negocio (.docx)"}
+        </button>
 
         <button
           className={styles.registerButton}
@@ -516,7 +569,7 @@ export default function ConversationalIntake() {
               ? "Registrando…"
               : "Confirmar y registrar requerimiento"}
         </button>
-        {!ready ? <small className={styles.registerHint}>El registro se habilita cuando el Business Case alcanza su Definition of Ready.</small> : null}
+        {!ready ? <small className={styles.registerHint}>La descarga y el registro se habilitan cuando el Business Case alcanza su Definition of Ready.</small> : null}
       </aside>
     </section>
   );
