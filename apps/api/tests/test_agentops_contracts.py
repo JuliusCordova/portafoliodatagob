@@ -49,19 +49,26 @@ class AgentOpsContractsTest(unittest.TestCase):
             started_at=NOW,
         )
         usage = LLMUsage(
+            agent_system_id=system.agent_system_id,
             run_id=run.run_id,
             trace_id=run.trace_id,
+            session_id="SESSION-001",
+            requested_by="business.user@atlas.local",
             agent_id=agent.agent_id,
             model_provider="google",
             model_name="gemini-2.5-flash",
             total_tokens=1200,
             latency_ms=450,
+            status="SUCCESS",
             observed_at=NOW,
         )
 
         self.assertEqual(run.agent_system_id, agent.agent_system_id)
         self.assertEqual(step.run_id, run.run_id)
+        self.assertEqual(usage.agent_system_id, run.agent_system_id)
         self.assertEqual(usage.trace_id, run.trace_id)
+        self.assertEqual(usage.session_id, "SESSION-001")
+        self.assertEqual(usage.status, "SUCCESS")
         self.assertEqual(step.execution_mode, "adk_agent")
 
     def test_cost_semantics_are_explicit(self):

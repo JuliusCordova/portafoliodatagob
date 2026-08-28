@@ -132,17 +132,23 @@ class AgentRunStep(BaseModel):
 
 
 class LLMUsage(BaseModel):
+    agent_system_id: str = Field(min_length=3, max_length=120)
     run_id: str = Field(min_length=3, max_length=240)
     agent_id: str = Field(min_length=3, max_length=160)
     model_provider: str = Field(min_length=2, max_length=120)
     model_name: str = Field(min_length=2, max_length=160)
     observed_at: datetime
-    trace_id: str | None = None
+    trace_id: str | None = Field(default=None, max_length=240)
+    session_id: str | None = Field(default=None, max_length=240)
+    requested_by: str | None = Field(default=None, max_length=240)
     request_count: int = Field(default=1, ge=1)
     input_tokens: int | None = Field(default=None, ge=0)
     output_tokens: int | None = Field(default=None, ge=0)
     total_tokens: int | None = Field(default=None, ge=0)
     latency_ms: int | None = Field(default=None, ge=0)
+    status: str = Field(default="SUCCESS", min_length=2, max_length=80)
+    error_code: str | None = Field(default=None, max_length=160)
+    error_message: str | None = Field(default=None, max_length=4000)
     billing_reference: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 

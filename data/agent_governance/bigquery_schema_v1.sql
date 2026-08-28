@@ -42,8 +42,10 @@ PARTITION BY DATE(started_at)
 CLUSTER BY agent_id, step_type, execution_mode, run_id;
 
 CREATE TABLE IF NOT EXISTS `${PROJECT_ID}.${DATASET}.agent_llm_usage` (
+  agent_system_id STRING NOT NULL,
   run_id STRING NOT NULL,
   trace_id STRING,
+  session_id STRING,
   agent_id STRING NOT NULL,
   model_provider STRING NOT NULL,
   model_name STRING NOT NULL,
@@ -52,13 +54,17 @@ CREATE TABLE IF NOT EXISTS `${PROJECT_ID}.${DATASET}.agent_llm_usage` (
   output_tokens INT64,
   total_tokens INT64,
   latency_ms INT64,
+  status STRING NOT NULL,
+  error_code STRING,
+  error_message STRING,
+  requested_by STRING,
   observed_at TIMESTAMP NOT NULL,
   billing_reference STRING,
   metadata JSON,
   ingested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP()
 )
 PARTITION BY DATE(observed_at)
-CLUSTER BY agent_id, model_name, run_id;
+CLUSTER BY agent_system_id, agent_id, model_name, run_id;
 
 CREATE TABLE IF NOT EXISTS `${PROJECT_ID}.${DATASET}.agent_artifacts` (
   artifact_id STRING NOT NULL,

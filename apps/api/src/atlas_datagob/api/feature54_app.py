@@ -4,6 +4,13 @@ from __future__ import annotations
 from io import BytesIO
 from typing import Any
 
+from atlas_datagob.agentops.adk_telemetry import (
+    agentops_run_context,
+    instrument_adk_agent,
+    instrument_adk_agent_tree,
+)
+from atlas_datagob.agents.agent import root_agent
+from atlas_datagob.agents.business_fact_extractor_agent import business_fact_extractor_agent
 from atlas_datagob.api import main as main_api
 from atlas_datagob.services.adk_intake_runtime import (
     get_intake_session_state,
@@ -45,6 +52,11 @@ main_api.API_VERSION = API_VERSION
 app = main_api.app
 if app is not None:
     app.version = API_VERSION
+
+# SPEC-059: instrumentation is attached once at process startup. The actual write is
+# controlled by ATLAS_AGENTOPS_ENABLED, so local/CI remain deterministic by default.
+instrument_adk_agent_tree(root_agent, agent_system_id="ATLAS-DATAGOB")
+instrument_adk_agent(business_fact_extractor_agent, agent_system_id="ATLAS-DATAGOB")
 
 
 class ConversationalIntakePayload(BaseModel):
@@ -93,11 +105,18 @@ async def conversational_intake(payload: ConversationalIntakePayload, request: R
 
     context = _authorized_user(request, "intake:validate")
     try:
-        return await run_intake_turn(
-            user_id=context.user,
-            message=payload.message,
-            session_id=payload.session_id,
-        )
+        # One application turn receives one reusable AgentOps run/trace correlation ID.
+        # Both the mandatory fact extractor and the main orchestrator/specialists execute
+        # inside this context, so all real Gemini calls can be grouped in the dashboard.
+        with agentops_run_context(
+            requested_by=context.user,
+            agent_system_id="ATLAS-DATAGOB",
+        ):
+            return await run_intake_turn(
+                user_id=context.user,
+                message=payload.message,
+                session_id=payload.session_id,
+            )
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Gemini ADK intake failed: {exc}") from exc
 

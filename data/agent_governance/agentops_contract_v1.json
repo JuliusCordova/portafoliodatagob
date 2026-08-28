@@ -1,6 +1,6 @@
 {
   "contract": "atlas.agentops.v1",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Canonical reusable Agent Governance and AgentOps contract for ATLAS and other governed agent products.",
   "identity": {
     "required_keys": [
@@ -11,7 +11,8 @@
     "correlation_keys": [
       "deployment_id",
       "run_id",
-      "trace_id"
+      "trace_id",
+      "session_id"
     ]
   },
   "entities": {
@@ -44,8 +45,8 @@
       "fields": ["run_id", "trace_id", "step_id", "parent_step_id", "agent_id", "step_type", "tool_name", "execution_mode", "status", "started_at", "finished_at", "duration_ms", "metadata"]
     },
     "LLMUsage": {
-      "required": ["run_id", "agent_id", "model_provider", "model_name", "observed_at"],
-      "fields": ["run_id", "trace_id", "agent_id", "model_provider", "model_name", "request_count", "input_tokens", "output_tokens", "total_tokens", "latency_ms", "observed_at", "billing_reference", "metadata"]
+      "required": ["agent_system_id", "run_id", "agent_id", "model_provider", "model_name", "status", "observed_at"],
+      "fields": ["agent_system_id", "run_id", "trace_id", "session_id", "agent_id", "model_provider", "model_name", "request_count", "input_tokens", "output_tokens", "total_tokens", "latency_ms", "status", "error_code", "error_message", "requested_by", "observed_at", "billing_reference", "metadata"]
     },
     "Artifact": {
       "required": ["artifact_id", "run_id", "artifact_type", "created_at"],
