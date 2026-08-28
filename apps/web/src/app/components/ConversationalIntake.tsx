@@ -43,6 +43,15 @@ type PolicyAssessment = {
   missing_controls?: string[];
 };
 
+type SpecialistActivity = {
+  key: "data_readiness" | "architecture" | "policies";
+  label: string;
+  agent_id: string;
+  completed: boolean;
+  summary: string;
+  execution_mode: "adk_agent" | "runtime_guard" | "session_state" | "not_run";
+};
+
 type BusinessCase = {
   business_problem?: string;
   desired_outcome?: string;
@@ -57,6 +66,8 @@ type BusinessCase = {
   architecture_assessment?: ArchitectureAssessment;
   policy_assessment?: PolicyAssessment;
   preliminary_risk?: string;
+  definition_gaps?: string[];
+  governance_requirements?: string[];
   gaps?: string[];
   recommendation?: string;
   completeness?: number;
@@ -72,6 +83,7 @@ type IntakeResponse = {
   architecture_assessment: ArchitectureAssessment;
   policy_assessment: PolicyAssessment;
   agent_trace: string[];
+  specialist_activity?: SpecialistActivity[];
 };
 
 type CatalogSnapshot = {
@@ -97,8 +109,23 @@ function label(value?: string | null) {
   return value.replaceAll("_", " ");
 }
 
+function executionModeLabel(mode: SpecialistActivity["execution_mode"]) {
+  if (mode === "adk_agent") return "Especialista ADK";
+  if (mode === "runtime_guard") return "Validación garantizada por ATLAS";
+  if (mode === "session_state") return "Resultado vigente de la sesión";
+  return "Aún no requerido";
+}
+
 function messageId() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function filenameFromDisposition(disposition: string | null) {
+  if (!disposition) return "ATLAS_Caso_de_Negocio.docx";
+  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) return decodeURIComponent(utf8Match[1].replace(/["']/g, ""));
+  const plainMatch = disposition.match(/filename="?([^";]+)"?/i);
+  return plainMatch?.[1] || "ATLAS_Caso_de_Negocio.docx";
 }
 
 export default function ConversationalIntake() {
@@ -118,8 +145,10 @@ export default function ConversationalIntake() {
   const [architecture, setArchitecture] = useState<ArchitectureAssessment>({});
   const [policies, setPolicies] = useState<PolicyAssessment>({});
   const [agentTrace, setAgentTrace] = useState<string[]>([]);
+  const [specialistActivity, setSpecialistActivity] = useState<SpecialistActivity[]>([]);
   const [catalog, setCatalog] = useState<CatalogSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [registering, setRegistering] = useState(false);
   const [error, setError] = useState("");
   const [registeredDemandId, setRegisteredDemandId] = useState<string | null>(null);
@@ -129,8 +158,8 @@ export default function ConversationalIntake() {
   const ready = Boolean(businessCase.ready_to_register);
 
   const visibleGaps = useMemo(
-    () => (businessCase.gaps ?? []).filter(Boolean).slice(0, 6),
-    [businessCase.gaps]
+    () => (businessCase.definition_gaps ?? businessCase.gaps ?? []).filter(Boolean).slice(0, 6),
+    [businessCase.definition_gaps, businessCase.gaps]
   );
 
   useEffect(() => {
@@ -176,6 +205,7 @@ export default function ConversationalIntake() {
       setArchitecture(payload.architecture_assessment ?? {});
       setPolicies(payload.policy_assessment ?? {});
       setAgentTrace(payload.agent_trace ?? []);
+      setSpecialistActivity(payload.specialist_activity ?? []);
       setMessages((current) => [
         ...current,
         {
@@ -195,6 +225,39 @@ export default function ConversationalIntake() {
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     await sendMessage(draft);
+  }
+
+  async function downloadBusinessCase() {
+    if (!sessionId || !ready || downloading) return;
+
+    setDownloading(true);
+    setError("");
+    try {
+      const response = await fetch("/api/intake/business-case/document", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId })
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`HTTP ${response.status}: ${text}`);
+      }
+
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = filenameFromDisposition(response.headers.get("content-disposition"));
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : "No se pudo generar el documento Word.";
+      setError(message);
+    } finally {
+      setDownloading(false);
+    }
   }
 
   async function registerBusinessCase() {
@@ -246,6 +309,7 @@ export default function ConversationalIntake() {
     setArchitecture({});
     setPolicies({});
     setAgentTrace([]);
+    setSpecialistActivity([]);
     setRegisteredDemandId(null);
     setError("");
     setMessages([
@@ -280,6 +344,44 @@ export default function ConversationalIntake() {
             </small>
           ) : null}
         </div>
+
+        {(specialistActivity.length || loading) ? (
+          <section className={styles.specialistPanel} aria-label="Especialistas ATLAS">
+            <div className={styles.specialistHeader}>
+              <div>
+                <span>Evaluación gobernada</span>
+                <strong>{loading ? "ATLAS está seleccionando especialistas…" : "Especialistas ATLAS"}</strong>
+              </div>
+              {!loading ? <small>Solo se ejecutan cuando existe información suficiente.</small> : null}
+            </div>
+            <div className={styles.specialistGrid}>
+              {specialistActivity.map((activity) => (
+                <article
+                  key={activity.key}
+                  className={activity.completed ? styles.specialistComplete : styles.specialistPending}
+                >
+                  <div className={styles.specialistStatus} aria-hidden="true">
+                    {activity.completed ? "✓" : "○"}
+                  </div>
+                  <div>
+                    <strong>{activity.label}</strong>
+                    <span>{activity.completed ? activity.summary : "Aún no requerido"}</span>
+                    <small>{executionModeLabel(activity.execution_mode)}</small>
+                  </div>
+                </article>
+              ))}
+              {loading && !specialistActivity.length ? (
+                <article className={styles.specialistWorking}>
+                  <div className={styles.specialistStatus} aria-hidden="true">●</div>
+                  <div>
+                    <strong>Orquestador ATLAS</strong>
+                    <span>Interpretando la necesidad y determinando qué validaciones corresponden.</span>
+                  </div>
+                </article>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
 
         <div className={styles.transcript} aria-live="polite">
           {messages.map((message) => (
@@ -413,10 +515,27 @@ export default function ConversationalIntake() {
           )}
         </div>
 
-        {agentTrace.length ? (
+        {(agentTrace.length || specialistActivity.length) ? (
           <details className={styles.trace}>
-            <summary>Trazabilidad de especialistas</summary>
-            <ul>{agentTrace.map((agent) => <li key={agent}>{agent}</li>)}</ul>
+            <summary>Ver trazabilidad técnica</summary>
+            {specialistActivity.length ? (
+              <div className={styles.traceSpecialists}>
+                {specialistActivity.filter((item) => item.completed).map((item) => (
+                  <div key={item.key}>
+                    <strong>{item.label}</strong>
+                    <span>{item.summary}</span>
+                    <code>{item.agent_id}</code>
+                    <small>{executionModeLabel(item.execution_mode)}</small>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {agentTrace.length ? (
+              <>
+                <strong className={styles.traceLabel}>Trace ADK del turno</strong>
+                <ul>{agentTrace.map((agent) => <li key={agent}>{agent}</li>)}</ul>
+              </>
+            ) : null}
           </details>
         ) : null}
 
@@ -424,10 +543,19 @@ export default function ConversationalIntake() {
           <strong>{ready ? "Listo para confirmación" : "Seguimos definiendo"}</strong>
           <p>
             {ready
-              ? "El Caso de Negocio está estructurado. Tú decides cuándo convertirlo en un requerimiento formal."
-              : "ATLAS seguirá haciendo preguntas hasta completar la información necesaria para registrar el requerimiento."}
+              ? "El Caso de Negocio está estructurado. Puedes descargar el documento Word, seguir refinándolo o registrarlo como requerimiento formal."
+              : "ATLAS seguirá haciendo preguntas hasta completar la información necesaria para registrar y descargar el Caso de Negocio."}
           </p>
         </div>
+
+        <button
+          className={styles.registerButton}
+          type="button"
+          disabled={!ready || !sessionId || downloading}
+          onClick={() => void downloadBusinessCase()}
+        >
+          {downloading ? "Generando Word…" : "Descargar Caso de Negocio (.docx)"}
+        </button>
 
         <button
           className={styles.registerButton}
@@ -441,7 +569,7 @@ export default function ConversationalIntake() {
               ? "Registrando…"
               : "Confirmar y registrar requerimiento"}
         </button>
-        {!ready ? <small className={styles.registerHint}>El registro se habilita cuando el Business Case alcanza su Definition of Ready.</small> : null}
+        {!ready ? <small className={styles.registerHint}>La descarga y el registro se habilitan cuando el Business Case alcanza su Definition of Ready.</small> : null}
       </aside>
     </section>
   );

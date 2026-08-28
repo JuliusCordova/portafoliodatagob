@@ -123,6 +123,121 @@
   background: #a8a8b5;
 }
 
+.specialistPanel {
+  padding: 14px 24px 16px;
+  border-bottom: 1px solid #efeff4;
+  background: linear-gradient(180deg, #fcfbff 0%, #ffffff 100%);
+}
+
+.specialistHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: end;
+  margin-bottom: 10px;
+}
+
+.specialistHeader > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.specialistHeader span {
+  color: #6d46e8;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.specialistHeader strong {
+  color: #272331;
+  font-size: 0.9rem;
+}
+
+.specialistHeader small {
+  color: #777785;
+  font-size: 0.72rem;
+}
+
+.specialistGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.specialistComplete,
+.specialistPending,
+.specialistWorking {
+  display: flex;
+  gap: 9px;
+  min-width: 0;
+  padding: 10px 11px;
+  border-radius: 13px;
+  border: 1px solid #e7e4ed;
+}
+
+.specialistComplete {
+  background: #f5fbf7;
+  border-color: #cde7d7;
+}
+
+.specialistPending {
+  background: #fafafd;
+}
+
+.specialistWorking {
+  grid-column: span 3;
+  background: #f7f4ff;
+  border-color: #ded4fb;
+}
+
+.specialistStatus {
+  display: grid;
+  place-items: center;
+  flex: 0 0 25px;
+  height: 25px;
+  border-radius: 8px;
+  background: #ffffff;
+  border: 1px solid #ddd9e5;
+  color: #6d46e8;
+  font-weight: 900;
+}
+
+.specialistComplete .specialistStatus {
+  color: #16794d;
+  border-color: #b9dfcd;
+}
+
+.specialistGrid article > div:last-child {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.specialistGrid strong,
+.specialistGrid span,
+.specialistGrid small {
+  overflow-wrap: anywhere;
+}
+
+.specialistGrid strong {
+  font-size: 0.78rem;
+  color: #32303a;
+}
+
+.specialistGrid span {
+  font-size: 0.75rem;
+  color: #55525f;
+}
+
+.specialistGrid small {
+  color: #85818c;
+  font-size: 0.66rem;
+}
+
 .transcript {
   min-height: 390px;
   max-height: 560px;
@@ -384,6 +499,43 @@
   font-weight: 700;
 }
 
+.traceSpecialists {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.traceSpecialists > div {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2px;
+  padding: 9px 10px;
+  border: 1px solid #ece8f0;
+  border-radius: 10px;
+  background: #fbfafc;
+}
+
+.traceSpecialists span,
+.traceSpecialists small {
+  color: #77707f;
+}
+
+.traceSpecialists code {
+  width: fit-content;
+  padding: 2px 5px;
+  border-radius: 5px;
+  background: #f1edf7;
+  color: #604198;
+  font-size: 0.72rem;
+}
+
+.traceLabel {
+  display: block;
+  margin-top: 12px;
+  font-size: 0.75rem;
+  color: #57515f;
+}
+
 .readyBox,
 .pendingBox {
   margin-top: 12px;
@@ -439,6 +591,21 @@
   }
 }
 
+@media (max-width: 760px) {
+  .specialistGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .specialistWorking {
+    grid-column: span 1;
+  }
+
+  .specialistHeader {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
 @media (max-width: 640px) {
   .panelHeader,
   .caseHeader,
@@ -448,7 +615,8 @@
 
   .panelHeader,
   .transcript,
-  .composer {
+  .composer,
+  .specialistPanel {
     padding-left: 16px;
     padding-right: 16px;
   }

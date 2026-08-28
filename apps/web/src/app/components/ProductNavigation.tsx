@@ -20,6 +20,8 @@ type NavigationItem = {
   label: string;
   description: string;
   requiredRoles?: string[];
+  strictRoles?: boolean;
+  hiddenWhenRestricted?: boolean;
   guardrail?: string;
 };
 
@@ -44,6 +46,15 @@ const navigationItems: NavigationItem[] = [
     guardrail: "Requiere rol de comité o arquitectura para decidir"
   },
   {
+    href: "/governance-catalog",
+    label: "Catálogo de gobierno",
+    description: "Mantener políticas, arquitecturas y trazabilidad del catálogo",
+    requiredRoles: ["committee_member"],
+    strictRoles: true,
+    hiddenWhenRestricted: true,
+    guardrail: "Uso exclusivo del Comité Operativo"
+  },
+  {
     href: "/sponsor-review",
     label: "Sponsor review",
     description: "Paquete ejecutivo imprimible y evidencia de decisión",
@@ -59,15 +70,16 @@ const navigationItems: NavigationItem[] = [
   }
 ];
 
-function hasAccess(roles: string[], requiredRoles?: string[]) {
-  if (!requiredRoles?.length) return true;
-  return roles.includes("platform_admin") || requiredRoles.some((role) => roles.includes(role));
+function hasAccess(roles: string[], item: NavigationItem) {
+  if (!item.requiredRoles?.length) return true;
+  if (item.strictRoles) return item.requiredRoles.some((role) => roles.includes(role));
+  return roles.includes("platform_admin") || item.requiredRoles.some((role) => roles.includes(role));
 }
 
 function roleLabel(roles: string[]) {
   if (!roles.length) return "Sin rol";
-  if (roles.includes("platform_admin")) return "Admin";
   if (roles.includes("committee_member")) return "Comité";
+  if (roles.includes("platform_admin")) return "Admin";
   if (roles.includes("data_architect")) return "Arquitectura";
   if (roles.includes("executive")) return "Ejecutivo";
   if (roles.includes("data_steward")) return "Steward";
@@ -110,7 +122,8 @@ export default function ProductNavigation() {
       </div>
       <div className={styles.links}>
         {navigationItems.map((item) => {
-          const allowed = hasAccess(roles, item.requiredRoles);
+          const allowed = hasAccess(roles, item);
+          if (!allowed && item.hiddenWhenRestricted) return null;
           return (
             <a
               key={item.href}

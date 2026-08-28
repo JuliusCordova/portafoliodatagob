@@ -72,6 +72,7 @@ PERMISSIONS_BY_ROLE: dict[str, set[str]] = {
     },
     ROLE_COMMITTEE_MEMBER: {
         *READ_ONLY_PERMISSIONS,
+        "policy:direct-read",
         "demand:update",
         "demand:status:update",
         "demand:score",
@@ -189,7 +190,7 @@ def has_permission(context: AuthContext, permission: str) -> bool:
 
 
 def require_permission(context: AuthContext, permission: str) -> None:
-    """Raise AuthorizationError when the context lacks a permission."""
+    """Raise AuthorizationError when a context lacks a permission."""
 
     if not has_permission(context, permission):
         raise AuthorizationError(f"User {context.user} lacks required permission: {permission}")
@@ -220,7 +221,7 @@ def permission_for_request(method: str, path: str) -> str | None:
     if path.startswith("/metadata/") and method == "GET":
         return "metadata:read"
     if path == "/policies" and method == "GET":
-        return "policy:read"
+        return "policy:direct-read"
     if path == "/scoring/calculate" and method == "POST":
         return "scoring:calculate"
     if path == "/intake/classify" and method == "POST":
@@ -231,6 +232,8 @@ def permission_for_request(method: str, path: str) -> str | None:
         return "intake:validate"
     if path == "/intake/governance-catalog" and method == "GET":
         return "policy:read"
+    if path == "/intake/business-case/document" and method == "POST":
+        return "intake:validate"
     if path == "/intake/business-case/register" and method == "POST":
         return "demand:create"
     if path == "/demands/validate-and-create" and method == "POST":
@@ -263,6 +266,10 @@ def authorize_request(method: str, path: str, headers: Mapping[str, str] | None 
         return _public_context()
 
     context = context_from_headers(headers)
+    if permission == "policy:direct-read" and ROLE_COMMITTEE_MEMBER not in context.roles:
+        raise AuthorizationError(
+            f"User {context.user} must be a committee_member to access the policy catalog directly"
+        )
     require_permission(context, permission)
     return context
 
