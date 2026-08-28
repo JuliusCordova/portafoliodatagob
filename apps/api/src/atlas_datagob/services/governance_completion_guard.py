@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from atlas_datagob.agents.conversational_intake_tools import (
-    evaluate_governance_policies,
-    validate_gcp_architecture,
+from atlas_datagob.agents.governed_specialist_tools import (
+    evaluate_governance_policies_governed,
+    validate_gcp_architecture_governed,
 )
 
 
@@ -39,7 +39,7 @@ def complete_required_governance_assessments(
     delta: dict[str, Any] = {}
 
     if primary_type and primary_type != "unknown" and not working.get("architecture_assessment"):
-        architecture = validate_gcp_architecture(
+        architecture = validate_gcp_architecture_governed(
             project_type=primary_type,
             proposed_architecture="",
             tool_context=context,
@@ -70,7 +70,7 @@ def complete_required_governance_assessments(
         and "sensitive_data" in readiness
     ):
         capabilities = dict(classification.get("capabilities", {}))
-        policy = evaluate_governance_policies(
+        policy = evaluate_governance_policies_governed(
             project_type=primary_type,
             known_controls=[],
             sensitive_data=bool(readiness.get("sensitive_data")),
