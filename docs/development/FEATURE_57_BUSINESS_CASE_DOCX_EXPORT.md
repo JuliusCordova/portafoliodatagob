@@ -113,6 +113,27 @@ Dependency:
 python-docx>=1.1,<2.0
 ```
 
+## Isolated Cloud Run preview
+
+Preview deployment is implemented by:
+
+```text
+scripts/cloud_run/deploy_feature57_preview.sh
+```
+
+The preview follows the same isolation principle used by prior ATLAS feature previews:
+
+- API service: `atlas-datagob-api-f57-preview`;
+- Web service: `atlas-datagob-web-f57-preview`;
+- demand collection: `atlas_demands_f57_preview`;
+- stable services `atlas-datagob-api` and `atlas-datagob-web` are not redeployed or modified;
+- the preview reuses only the already-approved stable configuration required for durable ADK sessions and the governed Cloud Storage catalog;
+- the preview uses a dedicated static preview identity;
+- API health must continue reporting `0.8.0`;
+- `/intake` and Web → API governance proxy must return successfully before the preview is considered conformant.
+
+This isolation allows a real Gemini ADK conversation and DOCX download test without risking demand writes to the stable Firestore backlog.
+
 ## Acceptance criteria
 
 - AC57-01: export is disabled while the Business Case is incomplete.
@@ -126,6 +147,25 @@ python-docx>=1.1,<2.0
 - AC57-09: the document includes an explicit governance disclaimer and traceability metadata.
 - AC57-10: existing registration and committee behavior remains unchanged.
 - AC57-11: Feature 54 API version remains `0.8.0`; Feature 57 is additive and backward compatible.
+- AC57-12: preview demand persistence is isolated in `atlas_demands_f57_preview` and stable Cloud Run services remain unchanged.
+
+## Local validation checkpoint — 2026-08-28
+
+Validated from Cloud Shell on the Feature 57 branch after the backward-compatibility fix:
+
+```text
+Ran 145 tests in 0.343s
+OK
+contract artifacts OK
+policy architecture smoke OK
+Python compileall PASS
+Cloud Run deploy-script syntax PASS
+Next.js production build PASS
+TypeScript PASS
+git diff --check PASS
+```
+
+GitHub Actions were not used as the authoritative gate for this checkpoint because all four workflows were terminating before executing steps; local gates provide the functional evidence for the feature branch.
 
 ## Visual QA baseline
 
