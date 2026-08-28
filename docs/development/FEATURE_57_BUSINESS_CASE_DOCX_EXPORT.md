@@ -52,6 +52,10 @@ Behavior:
 - returns the official Office Open XML MIME type and `Content-Disposition: attachment`;
 - does not persist a new demand and does not change the session state.
 
+### Backward-compatible API contract
+
+Feature 57 extends the existing Feature 54 API without changing its global API version. `API_VERSION` and the OpenAPI `info.version` remain `0.8.0` so the established Feature 54 runtime and contract tests stay valid. The DOCX endpoint is an additive, backward-compatible capability and does not alter existing conversational, registration, scoring, committee or lifecycle semantics.
+
 ## Word document structure
 
 The generated document follows an executive Business Case structure:
@@ -119,6 +123,7 @@ python-docx>=1.1,<2.0
 - AC57-08: the generated file opens as a valid Office Open XML Word document.
 - AC57-09: the document includes an explicit governance disclaimer and traceability metadata.
 - AC57-10: existing registration and committee behavior remains unchanged.
+- AC57-11: Feature 54 API version remains `0.8.0`; Feature 57 is additive and backward compatible.
 
 ## Visual QA baseline
 
