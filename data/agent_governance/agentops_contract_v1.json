@@ -1,0 +1,87 @@
+{
+  "contract": "atlas.agentops.v1",
+  "version": "1.0.0",
+  "description": "Canonical reusable Agent Governance and AgentOps contract for ATLAS and other governed agent products.",
+  "identity": {
+    "required_keys": [
+      "agent_system_id",
+      "agent_id",
+      "environment"
+    ],
+    "correlation_keys": [
+      "deployment_id",
+      "run_id",
+      "trace_id"
+    ]
+  },
+  "entities": {
+    "AgentSystem": {
+      "required": ["agent_system_id", "name", "environment", "status"],
+      "fields": ["agent_system_id", "name", "description", "business_owner", "technical_owner", "environment", "status", "created_at", "updated_at"]
+    },
+    "GovernedAgent": {
+      "required": ["agent_system_id", "agent_id", "canonical_name", "status"],
+      "fields": ["agent_system_id", "agent_id", "canonical_name", "description", "agent_type", "runtime", "model_provider", "model_name", "status", "created_at", "updated_at"]
+    },
+    "GovernanceProfile": {
+      "required": ["agent_id", "governance_status"],
+      "fields": ["agent_id", "business_owner", "technical_owner", "business_purpose", "business_area", "business_criticality", "autonomy_level", "risk_level", "data_classification", "human_oversight", "writes_to_systems", "applicable_policies", "required_controls", "governance_status", "last_assessed_at", "next_review_at", "updated_at", "updated_by"]
+    },
+    "ObservedDeployment": {
+      "required": ["deployment_id", "provider", "region", "discovery_status"],
+      "fields": ["deployment_id", "provider", "project_id", "region", "runtime_resource", "runtime_version", "image_uri", "environment", "discovery_status", "first_seen_at", "last_seen_at", "metadata"]
+    },
+    "DeploymentBinding": {
+      "required": ["binding_id", "agent_id", "deployment_id", "lifecycle_status"],
+      "fields": ["binding_id", "agent_id", "deployment_id", "environment", "lifecycle_status", "is_current", "binding_source", "bound_by", "bound_at"]
+    },
+    "AgentRun": {
+      "required": ["agent_system_id", "run_id", "status", "started_at"],
+      "fields": ["agent_system_id", "agent_id", "deployment_id", "run_id", "trace_id", "session_id", "environment", "status", "requested_by", "started_at", "finished_at", "duration_ms", "error_code", "error_message", "metadata"]
+    },
+    "AgentRunStep": {
+      "required": ["run_id", "step_id", "step_type", "status", "started_at"],
+      "fields": ["run_id", "trace_id", "step_id", "parent_step_id", "agent_id", "step_type", "tool_name", "execution_mode", "status", "started_at", "finished_at", "duration_ms", "metadata"]
+    },
+    "LLMUsage": {
+      "required": ["run_id", "agent_id", "model_provider", "model_name", "observed_at"],
+      "fields": ["run_id", "trace_id", "agent_id", "model_provider", "model_name", "request_count", "input_tokens", "output_tokens", "total_tokens", "latency_ms", "observed_at", "billing_reference", "metadata"]
+    },
+    "Artifact": {
+      "required": ["artifact_id", "run_id", "artifact_type", "created_at"],
+      "fields": ["artifact_id", "run_id", "agent_id", "artifact_type", "name", "uri", "content_type", "checksum", "created_at", "metadata"]
+    },
+    "EvaluationEvidence": {
+      "required": ["evaluation_id", "run_id", "profile_type", "status", "evaluated_at"],
+      "fields": ["evaluation_id", "run_id", "agent_id", "profile_type", "metric_name", "metric_value", "metric_unit", "status", "evidence_uri", "evaluated_at", "metadata"]
+    },
+    "Finding": {
+      "required": ["finding_id", "agent_id", "severity", "status", "created_at"],
+      "fields": ["finding_id", "agent_id", "run_id", "finding_type", "severity", "status", "title", "description", "recommended_action", "created_at", "closed_at", "metadata"]
+    },
+    "Alert": {
+      "required": ["alert_id", "severity", "source", "created_at"],
+      "fields": ["alert_id", "agent_system_id", "agent_id", "run_id", "alert_type", "severity", "title", "message", "source", "created_at", "acknowledged", "acknowledged_by", "acknowledged_at"]
+    },
+    "HealthSnapshot": {
+      "required": ["component", "status", "checked_at"],
+      "fields": ["agent_system_id", "component", "status", "latency_ms", "detail", "checked_at", "metadata"]
+    },
+    "CostAttribution": {
+      "required": ["cost_record_id", "cost_semantics", "currency", "period_start", "period_end"],
+      "fields": ["cost_record_id", "agent_system_id", "agent_id", "run_id", "service", "sku", "cost_semantics", "amount", "currency", "attribution_method", "confidence", "billing_export_reference", "period_start", "period_end", "created_at"]
+    }
+  },
+  "enumerations": {
+    "cost_semantics": ["billed", "attributed", "unattributed"],
+    "execution_mode": ["adk_agent", "runtime_guard", "tool", "session_state", "not_run"],
+    "governance_status": ["not_assessed", "compliant", "action_required", "restricted", "retired"],
+    "severity": ["info", "warning", "high", "critical"],
+    "quality_profile": ["agent_evaluation", "data_quality"]
+  },
+  "privacy_defaults": {
+    "persist_full_prompts": false,
+    "persist_full_responses": false,
+    "prefer_references_and_hashes": true
+  }
+}
