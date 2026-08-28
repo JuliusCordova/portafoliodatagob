@@ -23,10 +23,14 @@ for command in gcloud git jq python3 curl; do
 done
 
 BRANCH="$(git branch --show-current)"
-if [[ "$BRANCH" != "feature/58-governance-catalog-administration" ]]; then
-  echo "ERROR: expected feature/58-governance-catalog-administration, current=${BRANCH:-detached}" >&2
-  exit 1
-fi
+case "$BRANCH" in
+  "feature/58-governance-catalog-administration"|"integration/57-58-governed-intake")
+    ;;
+  *)
+    echo "ERROR: expected Feature 58 or Feature 57+58 integration branch, current=${BRANCH:-detached}" >&2
+    exit 1
+    ;;
+esac
 if [[ -n "$(git status --porcelain)" ]]; then
   echo "ERROR: working tree must be clean before preview build" >&2
   git status --short >&2
