@@ -165,7 +165,23 @@ TypeScript PASS
 git diff --check PASS
 ```
 
-GitHub Actions were not used as the authoritative gate for this checkpoint because all four workflows were terminating before executing steps; local gates provide the functional evidence for the feature branch.
+GitHub Actions were not used as the authoritative gate for this checkpoint because all four workflows were terminating before executing steps. The repository owner indicated that the monthly GitHub Actions minutes quota may be exhausted. Local gates provide the functional evidence for the feature branch until hosted CI capacity is restored.
+
+## Current status
+
+```text
+Implementation              COMPLETE
+DOCX unit/contract tests     PASS
+Full API regression suite    145/145 PASS
+Web production build         PASS
+Deploy-script syntax         PASS
+Backward compatibility       PASS — API 0.8.0 preserved
+Isolated preview script      READY
+Cloud Run preview            PENDING
+Real conversational DOCX E2E PENDING
+Merge                        NOT AUTHORIZED
+Production promotion         NOT AUTHORIZED
+```
 
 ## Visual QA baseline
 
