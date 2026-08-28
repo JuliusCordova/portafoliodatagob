@@ -38,8 +38,34 @@ class Feature58WebContractTest(unittest.TestCase):
         self.assertIn("Historial / Auditoría", text)
         self.assertIn("Principio arquitectónico", text)
         self.assertIn("Motivo del cambio", text)
-        self.assertIn("Nueva versión", text)
+        self.assertIn("Crear versión para editar", text)
         self.assertIn("Retirar", text)
+
+    def test_policy_lifecycle_is_explained_and_records_are_readable(self):
+        text = PAGE.read_text()
+        self.assertIn("¿Solo quieres leer?", text)
+        self.assertIn("Ver detalle", text)
+        self.assertIn("Lectura · Sin modificación", text)
+        self.assertIn("La versión vigente queda intacta mientras trabajas en un Draft", text)
+        self.assertIn("Editar borrador", text)
+        self.assertIn("El agente solo consume versiones activas", text)
+
+    def test_form_uses_canonical_project_types_and_guidance(self):
+        text = PAGE.read_text()
+        for project_type in (
+            "data_engineering",
+            "dashboard_analytics",
+            "machine_learning",
+            "generative_ai",
+            "agentic_ai",
+            "data_governance",
+            "hybrid",
+        ):
+            self.assertIn(project_type, text)
+        self.assertIn("Estos son los valores canónicos que usa ATLAS", text)
+        self.assertIn("snake_case", text)
+        self.assertIn("Prefijos sugeridos: DATA, SEC, ML, GENAI, AGENT o FINOPS", text)
+        self.assertIn("Puedes escribir uno por línea o separados por coma", text)
 
     def test_feature58_styles_exist(self):
         text = CSS.read_text()
@@ -47,6 +73,10 @@ class Feature58WebContractTest(unittest.TestCase):
         self.assertIn(".status_active", text)
         self.assertIn(".status_draft", text)
         self.assertIn(".status_retired", text)
+        self.assertIn(".lifecycleGuide", text)
+        self.assertIn(".detailPanel", text)
+        self.assertIn(".projectTypeGrid", text)
+        self.assertIn(".fieldHelp", text)
 
 
 if __name__ == "__main__":
