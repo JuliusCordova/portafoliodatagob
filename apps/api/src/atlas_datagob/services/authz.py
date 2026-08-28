@@ -189,7 +189,7 @@ def has_permission(context: AuthContext, permission: str) -> bool:
 
 
 def require_permission(context: AuthContext, permission: str) -> None:
-    """Raise AuthorizationError when the context lacks a permission."""
+    """Raise AuthorizationError when a context lacks a permission."""
 
     if not has_permission(context, permission):
         raise AuthorizationError(f"User {context.user} lacks required permission: {permission}")
@@ -231,6 +231,8 @@ def permission_for_request(method: str, path: str) -> str | None:
         return "intake:validate"
     if path == "/intake/governance-catalog" and method == "GET":
         return "policy:read"
+    if path == "/intake/business-case/document" and method == "POST":
+        return "intake:validate"
     if path == "/intake/business-case/register" and method == "POST":
         return "demand:create"
     if path == "/demands/validate-and-create" and method == "POST":
