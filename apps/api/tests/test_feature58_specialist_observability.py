@@ -25,7 +25,7 @@ class Feature58SpecialistObservabilityContractTest(unittest.TestCase):
 
     def test_trace_keeps_internal_agent_ids_expanded_only(self):
         text = PAGE.read_text()
-        self.assertIn("activity.agent_id", text)
+        self.assertIn("item.agent_id", text)
         self.assertIn("Trace ADK del turno", text)
 
     def test_specialist_styles_exist(self):
