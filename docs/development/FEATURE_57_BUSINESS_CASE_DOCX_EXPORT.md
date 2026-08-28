@@ -56,6 +56,8 @@ Behavior:
 
 Feature 57 extends the existing Feature 54 API without changing its global API version. `API_VERSION` and the OpenAPI `info.version` remain `0.8.0` so the established Feature 54 runtime and contract tests stay valid. The DOCX endpoint is an additive, backward-compatible capability and does not alter existing conversational, registration, scoring, committee or lifecycle semantics.
 
+Regression checkpoint: the initial Feature 57 draft changed the global version to `0.8.1`, which caused three established Feature 54 contract tests to fail. The fix preserves the existing `0.8.0` contract rather than weakening or rewriting those tests.
+
 ## Word document structure
 
 The generated document follows an executive Business Case structure:
