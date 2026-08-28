@@ -40,7 +40,7 @@ except Exception:  # pragma: no cover
     Field = None  # type: ignore
 
 
-API_VERSION = "0.8.1"
+API_VERSION = "0.8.0"
 main_api.API_VERSION = API_VERSION
 app = main_api.app
 if app is not None:
