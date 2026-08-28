@@ -109,6 +109,10 @@ preview = {
     "ATLAS_ALLOWED_ORIGIN_REGEX": r"https://.*\.run\.app",
     "GOOGLE_CLOUD_PROJECT": env.get("GOOGLE_CLOUD_PROJECT", project),
     "GOOGLE_CLOUD_LOCATION": env.get("GOOGLE_CLOUD_LOCATION", region),
+    # Gemini/ADK must use Vertex AI with the Cloud Run service account.
+    # Without this flag google-genai falls back to the Developer API and asks
+    # for GOOGLE_API_KEY, which is not the ATLAS production authentication model.
+    "GOOGLE_GENAI_USE_VERTEXAI": "true",
 }
 for name in required_from_stable:
     preview[name] = env[name]
@@ -159,6 +163,18 @@ if [[ "$(jq -r '.policy_count // 0' <<<"$CATALOG_JSON")" -lt 1 ]]; then
   exit 1
 fi
 
+# Verify the deployed revision is explicitly configured for Vertex AI rather
+# than relying on the Gemini Developer API / API-key fallback.
+GENAI_PROVIDER="$(gcloud run services describe "$API_SERVICE" \
+  --project "$PROJECT" \
+  --region "$REGION" \
+  --format='json(spec.template.spec.containers[0].env)' \
+  | jq -r '.spec.template.spec.containers[0].env[]? | select(.name=="GOOGLE_GENAI_USE_VERTEXAI") | .value' 2>/dev/null || true)"
+if [[ "$GENAI_PROVIDER" != "true" ]]; then
+  echo "ERROR: preview runtime is not explicitly configured for Vertex AI" >&2
+  exit 1
+fi
+
 cat > "$WEB_ENV_FILE" <<YAML
 ATLAS_INTERNAL_API_BASE: "${API_URL}"
 ATLAS_WEB_IDENTITY_MODE: "static"
@@ -204,6 +220,7 @@ echo "WEB_URL=${WEB_URL}"
 echo "INTAKE_URL=${WEB_URL}/intake"
 echo "PREVIEW_DEMAND_COLLECTION=atlas_demands_f57_preview"
 echo "API_VERSION=0.8.0"
+echo "GOOGLE_GENAI_USE_VERTEXAI=true"
 echo "STABLE_API_URL=${STABLE_API_URL}"
 echo "STABLE_WEB_URL=${STABLE_WEB_URL}"
 echo "STABLE_SERVICES_UNCHANGED=${STABLE_API_SERVICE},${STABLE_WEB_SERVICE}"
