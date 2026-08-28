@@ -18,9 +18,9 @@ class Feature58SpecialistObservabilityContractTest(unittest.TestCase):
     def test_intake_exposes_business_facing_specialist_panel(self):
         text = PAGE.read_text()
         self.assertIn("Especialistas ATLAS", text)
-        self.assertIn("Especialista de Arquitectura", text) if False else None
         self.assertIn("Validación garantizada por ATLAS", text)
         self.assertIn("specialist_activity", text)
+        self.assertIn("execution_mode", text)
         self.assertIn("Ver trazabilidad técnica", text)
 
     def test_trace_keeps_internal_agent_ids_expanded_only(self):
