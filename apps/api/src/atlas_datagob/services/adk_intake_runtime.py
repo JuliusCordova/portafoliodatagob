@@ -227,10 +227,35 @@ async def _get_or_create_session(user_id: str, session_id: str):
     return session
 
 
-async def _persist_turn_business_facts(*, user_id: str, session_id: str, facts: dict[str, Any]) -> None:
-    """Persist extracted facts via an ADK EventActions state delta for durable-service compatibility."""
+async def _persist_state_delta(
+    *,
+    user_id: str,
+    session_id: str,
+    state_delta: dict[str, Any],
+    invocation_prefix: str,
+) -> None:
+    """Persist deterministic runtime state through the durable ADK event contract."""
+
+    if not state_delta:
+        return
 
     from google.adk.events import Event, EventActions  # type: ignore
+
+    session_service, _ = _runtime()
+    session = await _get_or_create_session(user_id, session_id)
+    event = Event(
+        invocation_id=f"{invocation_prefix}-{uuid4().hex[:12]}",
+        # Runtime guards are deterministic ATLAS behavior, not a fabricated ADK
+        # specialist invocation. Attribute persistence to the registered orchestrator;
+        # specialist_activity reports execution_mode=runtime_guard separately.
+        author="atlas_intake_orchestrator",
+        actions=EventActions(state_delta=state_delta),
+    )
+    await session_service.append_event(session=session, event=event)
+
+
+async def _persist_turn_business_facts(*, user_id: str, session_id: str, facts: dict[str, Any]) -> None:
+    """Persist extracted facts via an ADK EventActions state delta for durable-service compatibility."""
 
     session_service, _ = _runtime()
     session = await _get_or_create_session(user_id, session_id)
@@ -238,27 +263,26 @@ async def _persist_turn_business_facts(*, user_id: str, session_id: str, facts: 
         dict(session.state.get("business_context", {})),
         facts,
     )
-    event = Event(
-        invocation_id=f"fact-extraction-{uuid4().hex[:12]}",
-        # The extractor runs in a separate ephemeral Runner, so its name is not part of
-        # the main conversational agent tree. Attribute the state mutation to the
-        # registered orchestrator to keep durable-session event replay free of
-        # "unknown agent" warnings; functional trace still records the extractor.
-        author="atlas_intake_orchestrator",
-        actions=EventActions(
-            state_delta={
-                "business_context": merged,
-                "last_turn_business_facts": facts,
-            }
-        ),
+    await _persist_state_delta(
+        user_id=user_id,
+        session_id=session_id,
+        state_delta={
+            "business_context": merged,
+            "last_turn_business_facts": facts,
+        },
+        invocation_prefix="fact-extraction",
     )
-    await session_service.append_event(session=session, event=event)
 
 
 async def run_intake_turn(*, user_id: str, message: str, session_id: str | None = None) -> dict:
     """Run one guided business-intake turn and return the conversational plus structured state."""
 
     from google.genai import types  # type: ignore
+
+    from atlas_datagob.services.governance_completion_guard import (
+        complete_required_governance_assessments,
+        specialist_activity_snapshot,
+    )
 
     resolved_session_id = session_id or new_intake_session_id()
     await _get_or_create_session(user_id, resolved_session_id)
@@ -302,7 +326,24 @@ async def run_intake_turn(*, user_id: str, message: str, session_id: str | None 
         session_id=resolved_session_id,
     )
     state = dict(session.state if session else {})
+
+    guard_delta, guard_activities = complete_required_governance_assessments(state)
+    if guard_delta:
+        await _persist_state_delta(
+            user_id=user_id,
+            session_id=resolved_session_id,
+            state_delta=guard_delta,
+            invocation_prefix="governance-completion",
+        )
+        session = await session_service.get_session(
+            app_name=APP_NAME,
+            user_id=user_id,
+            session_id=resolved_session_id,
+        )
+        state = dict(session.state if session else state)
+
     business_case = materialize_business_case(state)
+    specialist_activity = specialist_activity_snapshot(state, trace, guard_activities)
     response_fallback_used = not bool(final_text)
     if response_fallback_used:
         final_text = deterministic_intake_fallback_message(business_case)
@@ -317,6 +358,7 @@ async def run_intake_turn(*, user_id: str, message: str, session_id: str | None 
         "architecture_assessment": state.get("architecture_assessment", {}),
         "policy_assessment": state.get("policy_assessment", {}),
         "agent_trace": trace,
+        "specialist_activity": specialist_activity,
         "response_fallback_used": response_fallback_used,
     }
 
