@@ -30,8 +30,43 @@ Rules:
 3. Direct URL access by non-committee roles must be rejected with HTTP 403.
 4. Catalog read/write/publish administration APIs require `committee_member` role, not only a generic permission check.
 5. `data_owner`, `data_steward`, `data_architect`, `executive` and other business-facing users cannot list, create, edit, activate, retire or inspect catalog administration history through this module.
-6. The Conversational Intake and its specialist agents continue to consume only the active catalog through the existing read-only runtime service; this does not grant end users access to the administration screen.
-7. A technical `platform_admin` does not obtain catalog-maintenance capability merely because of the wildcard permission model; Feature 58 must enforce the explicit `committee_member` role for this route and mutation boundary. If a technical administrator needs to operate this module, that identity must also be assigned `committee_member` according to governance procedure.
+6. Business-facing users may learn about existing governance policies only through the ATLAS Conversational Intake. They do not receive a direct policy-catalog browser or policy-list API.
+7. The Conversational Intake and its specialist agents continue to consume only the active catalog through the existing read-only runtime service; this does not grant end users access to the administration screen.
+8. A technical `platform_admin` does not obtain catalog-maintenance capability merely because of the wildcard permission model; Feature 58 must enforce the explicit `committee_member` role for this route and mutation boundary. If a technical administrator needs to operate this module, that identity must also be assigned `committee_member` according to governance procedure.
+
+## Business-user policy consultation
+
+Business users interact with governance policy knowledge exclusively through the ATLAS conversational experience.
+
+Allowed interaction:
+
+```text
+Business user
+    -> ATLAS Conversational Intake
+        -> Policy & Controls Agent
+            -> active governance policy catalog
+```
+
+The conversational agent may answer questions such as:
+
+- "¿Qué políticas aplican a mi iniciativa?"
+- "¿Qué exige la política de Machine Learning?"
+- "¿Qué controles de seguridad debo considerar?"
+- "¿Existe alguna política para agentes de IA?"
+- "¿Qué políticas están vigentes para este caso?"
+
+Rules:
+
+1. The conversational agent may expose only policy records with `status=active` to business-facing users.
+2. Responses must be grounded in the deterministic governance catalog and must not invent policy requirements.
+3. When useful, the response should preserve traceability using `id@version`, policy name, applicable mandatory controls and the catalog recommendation in business language.
+4. Draft policies are internal working material of the Comité Operativo and must never be disclosed to business-facing users through the conversational agent.
+5. Retired policies and catalog administration history are not part of the normal business-user conversational experience.
+6. Business users cannot request the agent to create, modify, activate, retire, delete or publish a policy or architecture definition.
+7. Requests such as "cambia esta política", "crea una nueva política" or "elimina este patrón" must be rejected as unauthorized governance mutations and, when appropriate, direct the user to the Comité Operativo process.
+8. Business-facing users must not receive direct access to `GET /policies`, `/governance/catalog/*` or equivalent raw-catalog endpoints.
+9. Business-facing users must not receive direct access to the governance-catalog diagnostic payload if it exposes catalog-management information not needed for the conversational business experience.
+10. The Policy & Controls Agent is the business-facing policy consultation boundary; the governance catalog itself remains an internal governed asset.
 
 ## Lifecycle
 
@@ -167,7 +202,9 @@ committee_member
 
 The API must verify the role explicitly and must not authorize this module solely because another role has broad or wildcard permissions.
 
-Business-facing roles do not receive Feature 58 catalog administration permissions.
+Business-facing roles do not receive Feature 58 catalog administration permissions or direct raw-policy catalog read access. Policy consultation for those roles occurs through `/intake/conversation` and the Policy & Controls Agent.
+
+Existing generic `policy:read` behavior must be reviewed during Feature 58 implementation so that it cannot expose `GET /policies` or equivalent raw catalog data to business-facing roles contrary to this boundary.
 
 ## Security boundary
 
@@ -204,6 +241,8 @@ Every mutation requires a human-readable `change_note`.
 
 Every route in this administration API requires explicit `committee_member` role validation.
 
+Raw policy-list APIs intended for internal/runtime use must not be exposed to business-facing roles. Business policy consultation is mediated by the conversational endpoint.
+
 ## User experience
 
 New route:
@@ -218,7 +257,9 @@ For all other roles:
 
 - the menu item is absent;
 - direct page access returns an access-restricted experience / 403;
-- administration API calls return 403.
+- administration API calls return 403;
+- there is no alternate business-user catalog-list screen;
+- questions about existing policies are handled conversationally by ATLAS.
 
 The screen contains three tabs:
 
@@ -292,6 +333,11 @@ Destructive-looking actions require explicit confirmation and a change note.
 - FR58-13: Make newly activated definitions available to the Conversational Intake without agent redeployment.
 - FR58-14: Non-committee users must not see the governance catalog navigation entry.
 - FR58-15: Non-committee users must receive HTTP 403 for all Feature 58 administration routes.
+- FR58-16: Business-facing users can ask ATLAS conversationally about active policies relevant to their initiative.
+- FR58-17: The Policy & Controls Agent must ground business-user policy answers exclusively in active deterministic catalog records.
+- FR58-18: Business-facing users cannot directly list the raw policy catalog through `GET /policies`, `/governance/catalog/*` or an equivalent endpoint.
+- FR58-19: Draft and retired policies must not be exposed through normal business-user conversations.
+- FR58-20: The conversational agent must reject requests from business-facing users to mutate policy or architecture definitions.
 
 ## Non-functional requirements
 
@@ -303,6 +349,7 @@ Destructive-looking actions require explicit confirmation and a change note.
 - NFR58-06: Mutation APIs are disabled/fail closed without an authenticated Comité Operativo member.
 - NFR58-07: Current `governance_catalog.py` read behavior remains backward compatible.
 - NFR58-08: Feature 58 authorization uses explicit `committee_member` role enforcement and cannot be bypassed by business-facing roles or generic wildcard permissions.
+- NFR58-09: Business policy consultation is mediated through the conversational agent and does not expose internal draft, retired or administration catalog state.
 
 ## Acceptance criteria
 
@@ -319,6 +366,10 @@ Destructive-looking actions require explicit confirmation and a change note.
 - AC58-11: A `committee_member` sees and can access `/governance-catalog`.
 - AC58-12: `data_owner`, `data_steward`, `data_architect`, `executive` and other non-committee roles do not see the route and receive 403 on direct access.
 - AC58-13: `platform_admin` without `committee_member` cannot administer Feature 58 solely through wildcard permission inheritance.
+- AC58-14: A business user can ask "¿Qué políticas aplican a mi iniciativa?" and receives an answer grounded only in active policy records.
+- AC58-15: A business user asking for a draft or retired policy does not receive internal catalog content.
+- AC58-16: A business user cannot directly call a raw policy catalog list endpoint successfully.
+- AC58-17: A business user asking ATLAS to modify, create, activate or retire a policy receives a governed refusal and no catalog state changes.
 
 ## Out of scope V1
 
