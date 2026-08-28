@@ -43,6 +43,15 @@ type PolicyAssessment = {
   missing_controls?: string[];
 };
 
+type SpecialistActivity = {
+  key: "data_readiness" | "architecture" | "policies";
+  label: string;
+  agent_id: string;
+  completed: boolean;
+  summary: string;
+  execution_mode: "adk_agent" | "runtime_guard" | "session_state" | "not_run";
+};
+
 type BusinessCase = {
   business_problem?: string;
   desired_outcome?: string;
@@ -72,6 +81,7 @@ type IntakeResponse = {
   architecture_assessment: ArchitectureAssessment;
   policy_assessment: PolicyAssessment;
   agent_trace: string[];
+  specialist_activity?: SpecialistActivity[];
 };
 
 type CatalogSnapshot = {
@@ -97,6 +107,13 @@ function label(value?: string | null) {
   return value.replaceAll("_", " ");
 }
 
+function executionModeLabel(mode: SpecialistActivity["execution_mode"]) {
+  if (mode === "adk_agent") return "Especialista ADK";
+  if (mode === "runtime_guard") return "Validación garantizada por ATLAS";
+  if (mode === "session_state") return "Resultado vigente de la sesión";
+  return "Aún no requerido";
+}
+
 function messageId() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
@@ -118,6 +135,7 @@ export default function ConversationalIntake() {
   const [architecture, setArchitecture] = useState<ArchitectureAssessment>({});
   const [policies, setPolicies] = useState<PolicyAssessment>({});
   const [agentTrace, setAgentTrace] = useState<string[]>([]);
+  const [specialistActivity, setSpecialistActivity] = useState<SpecialistActivity[]>([]);
   const [catalog, setCatalog] = useState<CatalogSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
   const [registering, setRegistering] = useState(false);
@@ -176,6 +194,7 @@ export default function ConversationalIntake() {
       setArchitecture(payload.architecture_assessment ?? {});
       setPolicies(payload.policy_assessment ?? {});
       setAgentTrace(payload.agent_trace ?? []);
+      setSpecialistActivity(payload.specialist_activity ?? []);
       setMessages((current) => [
         ...current,
         {
@@ -246,6 +265,7 @@ export default function ConversationalIntake() {
     setArchitecture({});
     setPolicies({});
     setAgentTrace([]);
+    setSpecialistActivity([]);
     setRegisteredDemandId(null);
     setError("");
     setMessages([
@@ -280,6 +300,44 @@ export default function ConversationalIntake() {
             </small>
           ) : null}
         </div>
+
+        {(specialistActivity.length || loading) ? (
+          <section className={styles.specialistPanel} aria-label="Especialistas ATLAS">
+            <div className={styles.specialistHeader}>
+              <div>
+                <span>Evaluación gobernada</span>
+                <strong>{loading ? "ATLAS está seleccionando especialistas…" : "Especialistas ATLAS"}</strong>
+              </div>
+              {!loading ? <small>Solo se ejecutan cuando existe información suficiente.</small> : null}
+            </div>
+            <div className={styles.specialistGrid}>
+              {specialistActivity.map((activity) => (
+                <article
+                  key={activity.key}
+                  className={activity.completed ? styles.specialistComplete : styles.specialistPending}
+                >
+                  <div className={styles.specialistStatus} aria-hidden="true">
+                    {activity.completed ? "✓" : "○"}
+                  </div>
+                  <div>
+                    <strong>{activity.label}</strong>
+                    <span>{activity.completed ? activity.summary : "Aún no requerido"}</span>
+                    <small>{executionModeLabel(activity.execution_mode)}</small>
+                  </div>
+                </article>
+              ))}
+              {loading && !specialistActivity.length ? (
+                <article className={styles.specialistWorking}>
+                  <div className={styles.specialistStatus} aria-hidden="true">●</div>
+                  <div>
+                    <strong>Orquestador ATLAS</strong>
+                    <span>Interpretando la necesidad y determinando qué validaciones corresponden.</span>
+                  </div>
+                </article>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
 
         <div className={styles.transcript} aria-live="polite">
           {messages.map((message) => (
@@ -413,10 +471,27 @@ export default function ConversationalIntake() {
           )}
         </div>
 
-        {agentTrace.length ? (
+        {(agentTrace.length || specialistActivity.length) ? (
           <details className={styles.trace}>
-            <summary>Trazabilidad de especialistas</summary>
-            <ul>{agentTrace.map((agent) => <li key={agent}>{agent}</li>)}</ul>
+            <summary>Ver trazabilidad técnica</summary>
+            {specialistActivity.length ? (
+              <div className={styles.traceSpecialists}>
+                {specialistActivity.filter((item) => item.completed).map((item) => (
+                  <div key={item.key}>
+                    <strong>{item.label}</strong>
+                    <span>{item.summary}</span>
+                    <code>{item.agent_id}</code>
+                    <small>{executionModeLabel(item.execution_mode)}</small>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {agentTrace.length ? (
+              <>
+                <strong className={styles.traceLabel}>Trace ADK del turno</strong>
+                <ul>{agentTrace.map((agent) => <li key={agent}>{agent}</li>)}</ul>
+              </>
+            ) : null}
           </details>
         ) : null}
 
