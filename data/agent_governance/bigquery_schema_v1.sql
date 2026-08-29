@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS `${PROJECT_ID}.${DATASET}.agent_runs` (
   error_code STRING,
   error_message STRING,
   metadata JSON,
-  ingested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP()
+  ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP() NOT NULL
 )
 PARTITION BY DATE(started_at)
 CLUSTER BY agent_system_id, agent_id, status, run_id;
@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS `${PROJECT_ID}.${DATASET}.agent_run_steps` (
   finished_at TIMESTAMP,
   duration_ms INT64,
   metadata JSON,
-  ingested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP()
+  ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP() NOT NULL
 )
 PARTITION BY DATE(started_at)
 CLUSTER BY agent_id, step_type, execution_mode, run_id;
@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS `${PROJECT_ID}.${DATASET}.agent_llm_usage` (
   observed_at TIMESTAMP NOT NULL,
   billing_reference STRING,
   metadata JSON,
-  ingested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP()
+  ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP() NOT NULL
 )
 PARTITION BY DATE(observed_at)
 CLUSTER BY agent_system_id, agent_id, model_name, run_id;
@@ -77,7 +77,7 @@ CREATE TABLE IF NOT EXISTS `${PROJECT_ID}.${DATASET}.agent_artifacts` (
   checksum STRING,
   created_at TIMESTAMP NOT NULL,
   metadata JSON,
-  ingested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP()
+  ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP() NOT NULL
 )
 PARTITION BY DATE(created_at)
 CLUSTER BY agent_id, artifact_type, run_id;
@@ -94,7 +94,7 @@ CREATE TABLE IF NOT EXISTS `${PROJECT_ID}.${DATASET}.agent_evaluation_evidence` 
   evidence_uri STRING,
   evaluated_at TIMESTAMP NOT NULL,
   metadata JSON,
-  ingested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP()
+  ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP() NOT NULL
 )
 PARTITION BY DATE(evaluated_at)
 CLUSTER BY profile_type, agent_id, status, run_id;
@@ -110,10 +110,10 @@ CREATE TABLE IF NOT EXISTS `${PROJECT_ID}.${DATASET}.agent_alerts` (
   message STRING,
   source STRING NOT NULL,
   created_at TIMESTAMP NOT NULL,
-  acknowledged BOOL NOT NULL DEFAULT FALSE,
+  acknowledged BOOL DEFAULT FALSE NOT NULL,
   acknowledged_by STRING,
   acknowledged_at TIMESTAMP,
-  ingested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP()
+  ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP() NOT NULL
 )
 PARTITION BY DATE(created_at)
 CLUSTER BY severity, acknowledged, agent_id, alert_type;
@@ -126,7 +126,7 @@ CREATE TABLE IF NOT EXISTS `${PROJECT_ID}.${DATASET}.agent_health_snapshots` (
   detail STRING,
   checked_at TIMESTAMP NOT NULL,
   metadata JSON,
-  ingested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP()
+  ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP() NOT NULL
 )
 PARTITION BY DATE(checked_at)
 CLUSTER BY agent_system_id, component, status;
@@ -147,7 +147,7 @@ CREATE TABLE IF NOT EXISTS `${PROJECT_ID}.${DATASET}.agent_cost_attribution` (
   period_start TIMESTAMP NOT NULL,
   period_end TIMESTAMP NOT NULL,
   created_at TIMESTAMP NOT NULL,
-  ingested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP()
+  ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP() NOT NULL
 )
 PARTITION BY DATE(period_start)
 CLUSTER BY agent_system_id, agent_id, cost_semantics, service;
