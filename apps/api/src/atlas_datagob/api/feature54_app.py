@@ -16,6 +16,7 @@ from atlas_datagob.services.adk_intake_runtime import (
     get_intake_session_state,
     run_intake_turn,
 )
+from atlas_datagob.services.agentops_read_model import get_agentops_overview, validate_days
 from atlas_datagob.services.authz import (
     AuthenticationError,
     AuthorizationError,
@@ -97,6 +98,20 @@ async def _business_case_for_session(*, user_id: str, session_id: str) -> dict[s
             detail="No canonical Business Case has been generated for this session",
         )
     return business_case
+
+
+@app.get("/agent-governance/overview")
+def agent_governance_overview(request: Request, days: int = 14) -> dict:
+    """Expose persisted AgentOps evidence for the reusable governance dashboard."""
+
+    _authorized_user(request, "ops:read")
+    try:
+        resolved_days = validate_days(days)
+        return get_agentops_overview(days=resolved_days, agent_system_id="ATLAS-DATAGOB")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"AgentOps observability unavailable: {exc}") from exc
 
 
 @app.post("/intake/conversation")
@@ -211,7 +226,7 @@ async def register_business_case(payload: BusinessCaseRegistrationPayload, reque
             "business_case_completeness": business_case.get("completeness", 0),
         },
         actor=context.user,
-        comment="Caso de negocio confirmado por el usuario y registrado desde Gemini ADK Conversational Intake.",
+        comment="Caso de Negocio confirmado por el usuario y registrado desde Gemini ADK Conversational Intake.",
     )
     if demand is None:
         raise HTTPException(status_code=500, detail="Demand was created but could not be reloaded after Business Case update")
