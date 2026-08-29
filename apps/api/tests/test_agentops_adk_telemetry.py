@@ -4,11 +4,12 @@ import asyncio
 import os
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from google.adk.agents import Agent
 
 from atlas_datagob.agentops.adk_telemetry import (
+    _insert_row,
     agentops_run_context,
     build_agentops_callbacks,
     build_llm_usage_row,
@@ -65,6 +66,30 @@ class AgentOpsAdkTelemetryTest(unittest.TestCase):
         self.assertEqual(row["status"], "SUCCESS")
         self.assertNotIn("prompt", row)
         self.assertNotIn("response", row)
+
+    def test_bigquery_insert_uses_schema_aware_path_for_native_json(self):
+        table_id = "test-project.agentops.agent_llm_usage"
+        row = {
+            "agent_system_id": "ATLAS-DATAGOB",
+            "run_id": "RUN-001",
+            "agent_id": "atlas_intake_orchestrator",
+            "metadata": {"environment": "preview", "telemetry_source": "google_adk_callback"},
+        }
+        fake_table = object()
+        fake_client = MagicMock()
+        fake_client.get_table.return_value = fake_table
+        fake_client.insert_rows.return_value = []
+
+        async def _exercise() -> list[dict]:
+            with patch("google.cloud.bigquery.Client", return_value=fake_client):
+                return await _insert_row(table_id, row)
+
+        errors = asyncio.run(_exercise())
+
+        self.assertEqual(errors, [])
+        fake_client.get_table.assert_called_once_with(table_id)
+        fake_client.insert_rows.assert_called_once_with(fake_table, [row])
+        fake_client.insert_rows_json.assert_not_called()
 
     def test_callbacks_are_best_effort_when_bigquery_write_fails(self):
         callback_context = _FakeCallbackContext()
