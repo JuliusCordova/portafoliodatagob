@@ -168,11 +168,20 @@ def build_llm_usage_row(
 
 
 async def _insert_row(table_id: str, row: dict[str, Any]) -> list[dict[str, Any]]:
+    """Insert one telemetry row using the destination table schema.
+
+    BigQuery native JSON columns require the schema-aware client path. Using
+    ``insert_rows_json`` sends the Python mapping as an insertAll JSON object and
+    BigQuery can reject a native JSON column as "not a record". Loading the table
+    and using ``insert_rows`` lets the client serialize JSON-typed fields according
+    to the actual destination schema while preserving the native JSON column.
+    """
     from google.cloud import bigquery
 
     def _insert() -> list[dict[str, Any]]:
         client = bigquery.Client(project=_project_id())
-        return client.insert_rows_json(table_id, [row])
+        table = client.get_table(table_id)
+        return client.insert_rows(table, [row])
 
     return await asyncio.to_thread(_insert)
 
