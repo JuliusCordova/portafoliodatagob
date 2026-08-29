@@ -103,10 +103,10 @@ for kind in policies architecture_patterns; do
   gcloud storage objects describe \
     "gs://${GOV_BUCKET}/${GOV_PREFIX}/${kind}/catalog.json" \
     --format='value(generation)' >/dev/null
- done
+done
 
-# Dataset-scoped write access only. BigQuery dataset ACL WRITER is the legacy
-# dataset equivalent used here to avoid granting project-wide dataEditor.
+# Dataset-scoped write access only. Preserve the full existing dataset ACL and
+# append the runtime SA as WRITER if needed. This avoids a project-wide Data Editor grant.
 echo "=== F59 · GRANT RUNTIME WRITE ONLY TO PREVIEW DATASET ==="
 bq --project_id="$PROJECT" show --format=prettyjson "${PROJECT}:${AGENTOPS_DATASET}" > "$DATASET_JSON"
 python3 - "$DATASET_JSON" "$DATASET_UPDATED_JSON" "$RUNTIME_SA" <<'PY'
@@ -119,15 +119,13 @@ entry = {"role": "WRITER", "userByEmail": service_account}
 if entry not in access:
     access.append(entry)
 payload["access"] = access
-# bq update --source accepts the dataset resource representation; strip response-only fields.
-for key in (
-    "creationTime", "etag", "id", "kind", "lastModifiedTime", "location",
-    "selfLink", "type"
-):
-    payload.pop(key, None)
 Path(target).write_text(json.dumps(payload, indent=2) + "\n")
 PY
 bq --project_id="$PROJECT" update --source "$DATASET_UPDATED_JSON" "${PROJECT}:${AGENTOPS_DATASET}" >/dev/null
+
+# Verify the dataset-scoped writer is actually present after the update.
+bq --project_id="$PROJECT" show --format=prettyjson "${PROJECT}:${AGENTOPS_DATASET}" \
+  | jq -e --arg sa "$RUNTIME_SA" '.access | any(.role == "WRITER" and .userByEmail == $sa)' >/dev/null
 
 echo "=== F59 · BUILD ISOLATED API IMAGE ==="
 echo "SHA=${SHA}"
