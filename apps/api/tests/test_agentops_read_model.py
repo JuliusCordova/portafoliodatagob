@@ -51,23 +51,57 @@ class AgentOpsReadModelTest(unittest.TestCase):
                 "status": "SUCCESS",
             }
         ]
+        artifacts = [
+            {
+                "artifact_id": "ART-001",
+                "run_id": "RUN-9590140E24534EFC",
+                "agent_id": "atlas_architecture_validation_agent",
+                "artifact_type": "architecture_recommendation",
+                "name": "Architecture recommendation",
+                "uri": "gs://preview/artifacts/ART-001.json",
+                "created_at": "2026-08-29T23:12:10+00:00",
+            }
+        ]
+        alerts = [
+            {
+                "alert_id": "ALT-001",
+                "agent_system_id": "ATLAS-DATAGOB",
+                "agent_id": "atlas_policy_controls_agent",
+                "run_id": "RUN-9590140E24534EFC",
+                "severity": "WARNING",
+                "title": "Latency threshold observed",
+                "source": "agentops",
+                "acknowledged": False,
+                "created_at": "2026-08-29T23:12:12+00:00",
+            }
+        ]
 
         with patch(
             "atlas_datagob.services.agentops_read_model._table_id",
             return_value="test-project.agentops_preview.agent_llm_usage",
         ), patch(
             "atlas_datagob.services.agentops_read_model._query",
-            side_effect=[[summary], agents, runs],
+            side_effect=[[summary], agents, runs, artifacts, alerts],
         ) as query:
             result = get_agentops_overview(days=14)
 
-        self.assertEqual(query.call_count, 3)
+        self.assertEqual(query.call_count, 5)
         self.assertEqual(result["summary"]["llm_calls"], 13)
         self.assertEqual(result["agents"][0]["agent_id"], "atlas_intake_orchestrator")
         self.assertEqual(result["runs"][0]["run_id"], "RUN-9590140E24534EFC")
+        self.assertEqual(result["artifacts"][0]["artifact_id"], "ART-001")
+        self.assertEqual(result["alerts"][0]["alert_id"], "ALT-001")
         self.assertEqual(
             result["source"]["run_semantics"],
             "distinct_run_id_observed_in_agent_llm_usage",
+        )
+        self.assertEqual(
+            result["source"]["artifact_semantics"],
+            "persisted_artifacts_linked_to_llm_observed_runs",
+        )
+        self.assertEqual(
+            result["source"]["alert_semantics"],
+            "persisted_alerts_for_agent_system_or_observed_runs",
         )
         self.assertFalse(result["source"]["run_lifecycle_instrumented"])
         self.assertEqual(result["source"]["cost_semantics"], "not_available_in_this_increment")
