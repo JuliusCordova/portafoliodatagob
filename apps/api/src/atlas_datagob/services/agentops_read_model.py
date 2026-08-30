@@ -33,6 +33,13 @@ def _table_id() -> str:
     return f"{project}.{dataset}.agent_llm_usage"
 
 
+def _sibling_table(table_id: str, name: str) -> str:
+    dataset_prefix, _, _ = table_id.rpartition(".")
+    if not dataset_prefix:
+        raise RuntimeError(f"Invalid AgentOps table id: {table_id}")
+    return f"{dataset_prefix}.{name}"
+
+
 def validate_days(days: int) -> int:
     try:
         resolved = int(days)
@@ -85,10 +92,12 @@ def get_agentops_overview(
     days: int = DEFAULT_DAYS,
     agent_system_id: str = DEFAULT_AGENT_SYSTEM_ID,
 ) -> dict[str, Any]:
-    """Return executive summary, observed agents and recent LLM-observed runs."""
+    """Return executive summary and persisted AgentOps evidence for the dashboard."""
 
     resolved_days = validate_days(days)
     table_id = _table_id()
+    artifacts_table_id = _sibling_table(table_id, "agent_artifacts")
+    alerts_table_id = _sibling_table(table_id, "agent_alerts")
     base_filter = f"""
       FROM `{table_id}`
       WHERE agent_system_id = @agent_system_id
@@ -152,9 +161,67 @@ def get_agentops_overview(
       LIMIT 25
     """
 
+    artifacts_sql = f"""
+      SELECT
+        artifact_id,
+        run_id,
+        agent_id,
+        artifact_type,
+        name,
+        uri,
+        content_type,
+        checksum,
+        created_at
+      FROM `{artifacts_table_id}`
+      WHERE created_at >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL @days DAY)
+        AND run_id IN (
+          SELECT DISTINCT run_id
+          FROM `{table_id}`
+          WHERE agent_system_id = @agent_system_id
+            AND observed_at >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL @days DAY)
+        )
+      ORDER BY created_at DESC
+      LIMIT 50
+    """
+
+    alerts_sql = f"""
+      SELECT
+        alert_id,
+        agent_system_id,
+        agent_id,
+        run_id,
+        alert_type,
+        severity,
+        title,
+        message,
+        source,
+        created_at,
+        acknowledged,
+        acknowledged_by,
+        acknowledged_at
+      FROM `{alerts_table_id}`
+      WHERE created_at >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL @days DAY)
+        AND (
+          agent_system_id = @agent_system_id
+          OR (
+            agent_system_id IS NULL
+            AND run_id IN (
+              SELECT DISTINCT run_id
+              FROM `{table_id}`
+              WHERE agent_system_id = @agent_system_id
+                AND observed_at >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL @days DAY)
+            )
+          )
+        )
+      ORDER BY created_at DESC
+      LIMIT 50
+    """
+
     summary_rows = _query(summary_sql, days=resolved_days, agent_system_id=agent_system_id)
     agents = _query(agents_sql, days=resolved_days, agent_system_id=agent_system_id)
     runs = _query(runs_sql, days=resolved_days, agent_system_id=agent_system_id)
+    artifacts = _query(artifacts_sql, days=resolved_days, agent_system_id=agent_system_id)
+    alerts = _query(alerts_sql, days=resolved_days, agent_system_id=agent_system_id)
     summary = summary_rows[0] if summary_rows else {
         "observed_runs": 0,
         "llm_calls": 0,
@@ -177,9 +244,13 @@ def get_agentops_overview(
             "table": table_id,
             "run_semantics": "distinct_run_id_observed_in_agent_llm_usage",
             "run_lifecycle_instrumented": False,
+            "artifact_semantics": "persisted_artifacts_linked_to_llm_observed_runs",
+            "alert_semantics": "persisted_alerts_for_agent_system_or_observed_runs",
             "cost_semantics": "not_available_in_this_increment",
         },
         "summary": summary,
         "agents": agents,
         "runs": runs,
+        "artifacts": artifacts,
+        "alerts": alerts,
     }
