@@ -1,4 +1,5 @@
 import "./globals.css";
+import AgentGovernanceEnhancer from "./components/AgentGovernanceEnhancer";
 import DemoControls from "./components/DemoControls";
 import ExecutiveDemoRibbon from "./components/ExecutiveDemoRibbon";
 import ProductNavigation from "./components/ProductNavigation";
@@ -17,6 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <SessionBanner />
         <ProductNavigation />
         {children}
+        <AgentGovernanceEnhancer />
         <DemoControls />
       </body>
     </html>
