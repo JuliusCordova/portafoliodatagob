@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 import styles from "./ProductNavigation.module.css";
 
 type WebSession = {
@@ -88,6 +89,7 @@ function roleLabel(roles: string[]) {
 }
 
 export default function ProductNavigation() {
+  const pathname = usePathname();
   const [session, setSession] = useState<WebSession | null>(null);
 
   useEffect(() => {
@@ -110,6 +112,8 @@ export default function ProductNavigation() {
 
   const roles = useMemo(() => session?.roles ?? [], [session]);
   const currentRoleLabel = roleLabel(roles);
+
+  if (pathname?.startsWith("/agent-governance")) return null;
 
   return (
     <nav className={styles.shell} aria-label="ATLAS product navigation">
