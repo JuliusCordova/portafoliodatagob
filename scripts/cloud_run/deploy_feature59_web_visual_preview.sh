@@ -20,8 +20,23 @@ if [[ "$BRANCH" != "feature/59-reusable-agent-governance-agentops" ]]; then
   echo "ERROR: expected F59 branch, current=${BRANCH:-detached}" >&2
   exit 1
 fi
+
+# Next.js may rewrite next-env.d.ts during a successful local verify/build.
+# Normalize only that exact, unstaged generated-file change. Any other dirty
+# state (including staged/untracked changes) remains a hard safety stop.
+DIRTY_STATE="$(git status --porcelain)"
+if [[ -n "$DIRTY_STATE" ]]; then
+  if [[ "$DIRTY_STATE" == " M apps/web/next-env.d.ts" ]]; then
+    echo "F59 VISUAL · restoring generated apps/web/next-env.d.ts after Next.js verify"
+    git restore --worktree -- apps/web/next-env.d.ts
+  else
+    echo "ERROR: working tree must be clean before F59 visual preview deploy" >&2
+    git status --short >&2
+    exit 1
+  fi
+fi
 if [[ -n "$(git status --porcelain)" ]]; then
-  echo "ERROR: working tree must be clean before F59 visual preview deploy" >&2
+  echo "ERROR: working tree remains dirty after generated-file normalization" >&2
   git status --short >&2
   exit 1
 fi
