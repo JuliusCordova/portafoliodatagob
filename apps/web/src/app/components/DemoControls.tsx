@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import styles from "./DemoControls.module.css";
 
 type SyntheticDataResponse = {
@@ -17,6 +18,7 @@ type GenerationState =
   | "error";
 
 export default function DemoControls() {
+  const pathname = usePathname();
   const [state, setState] =
     useState<GenerationState>("idle");
   const [count, setCount] = useState(25);
@@ -91,6 +93,8 @@ export default function DemoControls() {
       setMessage(errorMessage);
     }
   }
+
+  if (pathname?.startsWith("/agent-governance")) return null;
 
   if (!panelOpen) {
     return (
