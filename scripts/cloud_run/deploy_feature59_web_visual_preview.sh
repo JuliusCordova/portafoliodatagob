@@ -41,6 +41,8 @@ if [[ -n "$(git status --porcelain)" ]]; then
   exit 1
 fi
 
+echo "F59 VISUAL · clean-tree guardrail active (generated next-env normalization allowed only when isolated)"
+
 SHA="$(git rev-parse HEAD)"
 SHORT_SHA="${SHA:0:7}"
 TAG="f59-visual-${SHORT_SHA}"
