@@ -4,11 +4,19 @@ from __future__ import annotations
 from io import BytesIO
 from typing import Any
 
+from atlas_datagob.agentops.adk_telemetry import (
+    agentops_run_context,
+    instrument_adk_agent,
+    instrument_adk_agent_tree,
+)
+from atlas_datagob.agents.agent import root_agent
+from atlas_datagob.agents.business_fact_extractor_agent import business_fact_extractor_agent
 from atlas_datagob.api import main as main_api
 from atlas_datagob.services.adk_intake_runtime import (
     get_intake_session_state,
     run_intake_turn,
 )
+from atlas_datagob.services.agentops_read_model import get_agentops_overview, validate_days
 from atlas_datagob.services.authz import (
     AuthenticationError,
     AuthorizationError,
@@ -45,6 +53,11 @@ main_api.API_VERSION = API_VERSION
 app = main_api.app
 if app is not None:
     app.version = API_VERSION
+
+# SPEC-059: instrumentation is attached once at process startup. The actual write is
+# controlled by ATLAS_AGENTOPS_ENABLED, so local/CI remain deterministic by default.
+instrument_adk_agent_tree(root_agent, agent_system_id="ATLAS-DATAGOB")
+instrument_adk_agent(business_fact_extractor_agent, agent_system_id="ATLAS-DATAGOB")
 
 
 class ConversationalIntakePayload(BaseModel):
@@ -87,17 +100,38 @@ async def _business_case_for_session(*, user_id: str, session_id: str) -> dict[s
     return business_case
 
 
+@app.get("/agent-governance/overview")
+def agent_governance_overview(request: Request, days: int = 14) -> dict:
+    """Expose persisted AgentOps evidence for the reusable governance dashboard."""
+
+    _authorized_user(request, "ops:read")
+    try:
+        resolved_days = validate_days(days)
+        return get_agentops_overview(days=resolved_days, agent_system_id="ATLAS-DATAGOB")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"AgentOps observability unavailable: {exc}") from exc
+
+
 @app.post("/intake/conversation")
 async def conversational_intake(payload: ConversationalIntakePayload, request: Request) -> dict:
     """Run one Gemini ADK guided-intake turn without persisting a demand."""
 
     context = _authorized_user(request, "intake:validate")
     try:
-        return await run_intake_turn(
-            user_id=context.user,
-            message=payload.message,
-            session_id=payload.session_id,
-        )
+        # One application turn receives one reusable AgentOps run/trace correlation ID.
+        # Both the mandatory fact extractor and the main orchestrator/specialists execute
+        # inside this context, so all real Gemini calls can be grouped in the dashboard.
+        with agentops_run_context(
+            requested_by=context.user,
+            agent_system_id="ATLAS-DATAGOB",
+        ):
+            return await run_intake_turn(
+                user_id=context.user,
+                message=payload.message,
+                session_id=payload.session_id,
+            )
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Gemini ADK intake failed: {exc}") from exc
 
@@ -192,7 +226,7 @@ async def register_business_case(payload: BusinessCaseRegistrationPayload, reque
             "business_case_completeness": business_case.get("completeness", 0),
         },
         actor=context.user,
-        comment="Caso de negocio confirmado por el usuario y registrado desde Gemini ADK Conversational Intake.",
+        comment="Caso de Negocio confirmado por el usuario y registrado desde Gemini ADK Conversational Intake.",
     )
     if demand is None:
         raise HTTPException(status_code=500, detail="Demand was created but could not be reloaded after Business Case update")
