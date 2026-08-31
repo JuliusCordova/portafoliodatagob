@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
 import styles from "./AgentGovernanceEvidenceSections.module.css";
 
@@ -60,19 +59,13 @@ function severityClass(severity: string): string {
 
 export default function AgentGovernanceEvidenceSections() {
   const pathname = usePathname();
-  const [target, setTarget] = useState<HTMLElement | null>(null);
   const [days, setDays] = useState("14");
   const [overview, setOverview] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!pathname?.startsWith("/agent-governance")) {
-      setTarget(null);
-      return;
-    }
-    setTarget(document.getElementById("summary")?.parentElement ?? null);
-
+    if (!pathname?.startsWith("/agent-governance")) return;
     const select = document.querySelector('select[aria-label="Periodo"]') as HTMLSelectElement | null;
     if (!select) return;
     setDays(select.value || "14");
@@ -108,12 +101,12 @@ export default function AgentGovernanceEvidenceSections() {
     };
   }, [days, pathname]);
 
-  if (!pathname?.startsWith("/agent-governance") || !target) return null;
+  if (!pathname?.startsWith("/agent-governance")) return null;
 
   const artifacts = overview?.artifacts ?? [];
   const alerts = overview?.alerts ?? [];
 
-  return createPortal(
+  return (
     <section className={styles.evidenceGrid} aria-label="Evidencia AgentOps adicional">
       <article id="artifacts" className={styles.panel}>
         <header className={styles.panelHead}>
@@ -197,7 +190,6 @@ export default function AgentGovernanceEvidenceSections() {
           </div>
         ) : null}
       </article>
-    </section>,
-    target
+    </section>
   );
 }
