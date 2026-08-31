@@ -1,6 +1,7 @@
 import "./globals.css";
 import AgentGovernanceEnhancer from "./components/AgentGovernanceEnhancer";
 import AgentGovernanceEvidenceSections from "./components/AgentGovernanceEvidenceSections";
+import AgentGovernanceNavigationSync from "./components/AgentGovernanceNavigationSync";
 import DemoControls from "./components/DemoControls";
 import ExecutiveDemoRibbon from "./components/ExecutiveDemoRibbon";
 import ProductNavigation from "./components/ProductNavigation";
@@ -19,6 +20,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <SessionBanner />
         <ProductNavigation />
         {children}
+        <AgentGovernanceNavigationSync />
         <AgentGovernanceEnhancer />
         <AgentGovernanceEvidenceSections />
         <DemoControls />
