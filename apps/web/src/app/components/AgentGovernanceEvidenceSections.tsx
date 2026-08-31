@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
 import styles from "./AgentGovernanceEvidenceSections.module.css";
 
@@ -59,10 +60,37 @@ function severityClass(severity: string): string {
 
 export default function AgentGovernanceEvidenceSections() {
   const pathname = usePathname();
+  const [target, setTarget] = useState<HTMLElement | null>(null);
   const [days, setDays] = useState("14");
   const [overview, setOverview] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!pathname?.startsWith("/agent-governance")) {
+      setTarget(null);
+      return;
+    }
+
+    const footer = document.querySelector("main footer");
+    const parent = footer?.parentElement;
+    if (!footer || !parent) return;
+
+    let mount = document.getElementById("atlas-agentops-evidence-mount");
+    let created = false;
+    if (!mount) {
+      mount = document.createElement("div");
+      mount.id = "atlas-agentops-evidence-mount";
+      parent.insertBefore(mount, footer);
+      created = true;
+    }
+    setTarget(mount);
+
+    return () => {
+      setTarget(null);
+      if (created && mount?.parentElement) mount.parentElement.removeChild(mount);
+    };
+  }, [pathname]);
 
   useEffect(() => {
     if (!pathname?.startsWith("/agent-governance")) return;
@@ -101,12 +129,12 @@ export default function AgentGovernanceEvidenceSections() {
     };
   }, [days, pathname]);
 
-  if (!pathname?.startsWith("/agent-governance")) return null;
+  if (!pathname?.startsWith("/agent-governance") || !target) return null;
 
   const artifacts = overview?.artifacts ?? [];
   const alerts = overview?.alerts ?? [];
 
-  return (
+  return createPortal(
     <section className={styles.evidenceGrid} aria-label="Evidencia AgentOps adicional">
       <article id="artifacts" className={styles.panel}>
         <header className={styles.panelHead}>
@@ -190,6 +218,7 @@ export default function AgentGovernanceEvidenceSections() {
           </div>
         ) : null}
       </article>
-    </section>
+    </section>,
+    target
   );
 }
