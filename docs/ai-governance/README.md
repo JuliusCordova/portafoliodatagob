@@ -36,3 +36,9 @@ en las specs de ATLAS los requisitos del producto.
 
 ## Historial
 - 2026-10-08: creación del hub; relación economía agéntica / PROXI / MPP y enlace a DevPattern.
+
+## Arquitectura de referencia v4
+
+[Análisis y evolución de ATLAS DataGob](reference-v4-alignment.md): siete planos, contratos, comités, gates, evidencia existente, tensiones y backlog priorizado GOV-V4-01–08. Distingue madurez, autonomía y entrega; mantiene SPEC-059 y pagos como extensiones versionadas propuestas.
+
+- 2026-10-08: incorporación del análisis de referencia v4 y trazabilidad al PDF suministrado; sin cambios de runtime.
