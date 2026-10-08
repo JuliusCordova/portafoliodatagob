@@ -218,3 +218,7 @@ Roadmap total ATLAS DataGob:      93%
 ## 12. Próximo paso recomendado
 
 Ejecutar una demo ejecutiva de 7 minutos usando el dataset curado, capturar evidencia operativa y correr el gate de release candidate para determinar si el piloto puede promoverse a una validación productiva controlada.
+
+## Base de conocimiento de Gobierno de IA
+
+[Documentación reusable de Gobierno de IA](docs/ai-governance/README.md): economía agéntica, PROXI, MPP y evolución de controles. El contenido distingue propuestas de capacidades implementadas.

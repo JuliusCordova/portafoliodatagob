@@ -97,3 +97,7 @@ An initiative is FinOps-ready when it has:
 - Storage, query and serving cost controls.
 - Budget and alert requirement.
 - Architecture recommendation aligned to value and cost.
+
+## Agentic economic commitments — proposed extension
+
+See [agentic economics, PROXI and MPP](../ai-governance/agentic-economics-mpp-proxi.md) for delegated spend authority, atomic reservations and reconciliation. This is a proposed design extension, not evidence of payment enforcement in the current runtime. Existing FinOps controls remain applicable.
